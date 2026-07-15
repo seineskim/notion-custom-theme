@@ -27,6 +27,7 @@ import {
   posthogConfig,
   posthogId
 } from '@/lib/config'
+import { bodyFont, headingFont } from '@/lib/fonts'
 
 if (!isServer) {
   bootstrap()
@@ -61,5 +62,9 @@ export default function App({ Component, pageProps }: AppProps) {
     }
   }, [router.events])
 
-  return <Component {...pageProps} />
+  return (
+    <div className={`${bodyFont.variable} ${headingFont.variable}`}>
+      <Component {...pageProps} />
+    </div>
+  )
 }

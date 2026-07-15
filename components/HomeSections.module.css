@@ -1,0 +1,23 @@
+.sections {
+  display: flex;
+  flex-direction: column;
+}
+
+.section {
+  padding: 2rem 0 5rem;
+  scroll-margin-top: 1.5rem;
+}
+
+.section:not(:last-child) {
+  border-bottom: 1px solid var(--border-color);
+}
+
+.sectionTitle {
+  font-family: var(--font-heading), var(--notion-font);
+  font-weight: 700;
+  font-size: 0.85rem;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--accent-strong);
+  margin: 0 0 1.5rem;
+}

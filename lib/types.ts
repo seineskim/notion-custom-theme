@@ -16,6 +16,9 @@ export interface PageProps {
   recordMap?: ExtendedRecordMap
   pageId?: string
   error?: PageError
+  // only present for the root/home page: recordMaps for each scrollable
+  // home section (About / Experience / Projects), keyed by section id
+  sectionRecordMaps?: Record<string, ExtendedRecordMap>
 }
 
 export interface ExtendedTweetRecordMap extends ExtendedRecordMap {

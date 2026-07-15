@@ -1,13 +1,22 @@
 import type { PageProps } from '@/lib/types'
 import { NotionPage } from '@/components/NotionPage'
 import { domain } from '@/lib/config'
+import { homeSections } from '@/lib/home-sections'
+import { getPage } from '@/lib/notion'
 import { resolveNotionPage } from '@/lib/resolve-notion-page'
 
 export const getStaticProps = async () => {
   try {
     const props = await resolveNotionPage(domain)
 
-    return { props, revalidate: 10 }
+    const sectionEntries = await Promise.all(
+      homeSections.map(
+        async (section) => [section.id, await getPage(section.pageId)] as const
+      )
+    )
+    const sectionRecordMaps = Object.fromEntries(sectionEntries)
+
+    return { props: { ...props, sectionRecordMaps }, revalidate: 10 }
   } catch (err) {
     console.error('page error', domain, err)
 

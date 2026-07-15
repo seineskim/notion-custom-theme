@@ -43,16 +43,6 @@
   width: 100% !important;
 }
 
-.notion-header .notion-nav-header {
-  max-width: 1100px;
-  margin: 0 auto;
-  overflow-x: auto;
-}
-
-.notion-nav-header-rhs {
-  gap: 0.5rem;
-}
-
 .notion-gallery-grid {
   grid-template-columns: repeat(auto-fill, minmax(360px, 1fr));
   grid-gap: 6vmin;
@@ -124,7 +114,7 @@
   line-height: 1.5;
   font-style: italic;
   font-size: 1.2em;
-  border-left: 4px solid #67bdfc;
+  border-left: 4px solid var(--accent-strong);
 }
 
 .notion-h1,
@@ -237,7 +227,11 @@
 .notion-link:hover {
   border-bottom-color: transparent;
 
-  background-image: linear-gradient(90.68deg, #b439df 0.26%, #e5337e 102.37%);
+  background-image: linear-gradient(
+    90.68deg,
+    var(--accent) 0.26%,
+    var(--accent-strong) 102.37%
+  );
   background-repeat: no-repeat;
   background-position: 0 100%;
   background-size: 100% 0.1rem;
@@ -275,12 +269,12 @@
 
 .notion-purple_background,
 .notion-pink_background {
-  /* light pink */
+  /* brand accent pink, used for tags/highlights */
   background-image: linear-gradient(
     119deg,
     var(--bg-color),
-    #f5b8d1 10.5%,
-    #f9bcd3 85.29%,
+    var(--accent) 10.5%,
+    var(--accent) 85.29%,
     var(--bg-color)
   );
 }
@@ -331,11 +325,9 @@
   );
 }
 
-/* disable highlighting in dark mode */
+/* disable highlighting in dark mode, except the brand accent tags */
 .dark-mode .notion-red_background,
-.dark-mode .notion-pink_background,
 .dark-mode .notion-blue_background,
-.dark-mode .notion-purple_background,
 .dark-mode .notion-teal_background,
 .dark-mode .notion-yellow_background,
 .dark-mode .notion-orange_background,
@@ -345,6 +337,13 @@
   margin: 0;
   border-radius: 0;
   background: none !important;
+}
+
+.dark-mode .notion-purple_background,
+.dark-mode .notion-pink_background {
+  background-image: none;
+  background-color: var(--bg-color-2);
+  color: var(--fg-color);
 }
 
 /* if you don't want rounded page icon images, remove this */
@@ -358,26 +357,65 @@
 }
 
 .notion-header {
-  background: hsla(0, 0%, 100%, 0.8);
+  background: rgba(252, 250, 251, 0.82);
+  box-shadow: inset 0 -1px 0 0 var(--border-color);
   backdrop-filter: saturate(180%) blur(16px);
 }
 
 .dark-mode .notion-header {
-  background: transparent;
-  box-shadow: inset 0 -1px 0 0 rgba(0, 0, 0, 0.1);
+  background: rgba(21, 19, 22, 0.78);
+  box-shadow: inset 0 -1px 0 0 var(--border-color);
   backdrop-filter: saturate(180%) blur(20px);
 }
 
 /* Workaround for Firefox not supporting backdrop-filter yet */
 @-moz-document url-prefix() {
   .dark-mode .notion-header {
-    background: hsla(203, 8%, 20%, 0.8);
+    background: rgba(21, 19, 22, 0.92);
   }
 }
 
 .notion-bookmark:hover {
-  border-image: linear-gradient(90.68deg, #b439df 0.26%, #e5337e 102.37%);
+  border-image: linear-gradient(
+    90.68deg,
+    var(--accent) 0.26%,
+    var(--accent-strong) 102.37%
+  );
   border-image-slice: 1;
+}
+
+/* Explore section links styled as cards.
+ * A true side-by-side grid isn't possible here with CSS alone: these links
+ * are direct children of `.notion-page-content-inner`, which react-notion-x
+ * lays out as `display: flex; flex-direction: column` for the whole page.
+ * Flex items are always blockified regardless of their own `display`, so a
+ * per-child `inline-flex` + `width: 50%` never wraps into columns — it just
+ * changes the width of each full-height row. Getting a real grid requires
+ * either wrapping these links in a Notion "Columns" block (so they render
+ * inside their own `.notion-column-list` flex-row container) or a custom
+ * React component outside the literal Notion block tree. */
+.notion-page-content-inner > .notion-page-link {
+  height: auto;
+  padding: 0.85em 1em;
+  margin: 0.4em 0;
+  border: 1px solid var(--border-color);
+  border-radius: 12px;
+  transition:
+    border-color 150ms ease,
+    transform 150ms ease,
+    box-shadow 150ms ease,
+    background 150ms ease;
+}
+
+.notion-page-content-inner > .notion-page-link:hover {
+  background: var(--bg-color-1);
+  border-color: var(--accent-strong);
+  transform: translateY(-1px);
+  box-shadow: 0 6px 20px rgba(201, 124, 152, 0.15);
+}
+
+.dark-mode .notion-page-content-inner > .notion-page-link:hover {
+  box-shadow: 0 6px 20px rgba(0, 0, 0, 0.35);
 }
 
 .notion-block-ab9a258d6cf444f3bb40dc2600feae91 .notion-column {
@@ -402,4 +440,44 @@
 
 .notion-equation.notion-equation-block{
   align-items: center;
+}
+
+/* Résumé file attachment: style it like the Contact/LinkedIn text links
+ * above it instead of the default paperclip + filename + filesize chip.
+ * Kept as a real Notion file block (not a plain pasted URL) so the download
+ * link is re-signed on every page load instead of expiring. */
+.notion-file {
+  width: auto;
+  margin: 0.4em 0 0;
+}
+
+.notion-file-link {
+  display: inline-flex;
+  padding: 0;
+  border-radius: 0;
+}
+
+.notion-file-icon,
+.notion-file-size {
+  display: none;
+}
+
+.notion-file-title {
+  overflow: visible;
+  text-decoration: underline;
+  text-underline-offset: 0.15em;
+}
+
+.notion-file-link:hover .notion-file-title {
+  color: var(--accent-strong);
+}
+
+/* A wide table (e.g. a long work-history table with a wide Description
+ * column) renders wider than its column and would otherwise overflow the
+ * page instead of scrolling in place — which is what made its horizontal
+ * scrollbar appear to "reach into" the fixed sidebar. Scoping the scroll to
+ * the table's own wrapper keeps it contained to the content column. */
+div:has(> .notion-simple-table) {
+  max-width: 100%;
+  overflow-x: auto;
 }
