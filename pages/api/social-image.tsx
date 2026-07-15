@@ -17,30 +17,28 @@ import { mapImageUrl } from '@/lib/map-image-url'
 import { notion } from '@/lib/notion-api'
 import { type NotionPageInfo, type PageError } from '@/lib/types'
 
-export const runtime = 'edge'
-
 export default async function OGImage(
   req: NextApiRequest,
   res: NextApiResponse
 ) {
-  const { searchParams } = new URL(req.url!)
   const pageId = parsePageId(
-    searchParams.get('id') || libConfig.rootNotionPageId
+    (req.query.id as string) || libConfig.rootNotionPageId
   )
   if (!pageId) {
-    return new Response('Invalid notion page id', { status: 400 })
+    res.status(400).send('Invalid notion page id')
+    return
   }
 
   const pageInfoOrError = await getNotionPageInfo({ pageId })
   if (pageInfoOrError.type === 'error') {
-    return res.status(pageInfoOrError.error.statusCode).send({
+    res.status(pageInfoOrError.error.statusCode).send({
       error: pageInfoOrError.error.message
     })
+    return
   }
   const pageInfo = pageInfoOrError.data
-  console.log(pageInfo)
 
-  return new ImageResponse(
+  const imageResponse = new ImageResponse(
     <div
       style={{
         position: 'relative',
@@ -162,6 +160,10 @@ export default async function OGImage(
       ]
     }
   )
+
+  const buffer = Buffer.from(await imageResponse.arrayBuffer())
+  res.setHeader('Content-Type', 'image/png')
+  res.status(200).send(buffer)
 }
 
 export async function getNotionPageInfo({
