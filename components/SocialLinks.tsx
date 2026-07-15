@@ -22,6 +22,8 @@ export function SocialLinks() {
         const Icon = icons[link.id]
         const isExternal = !link.href.startsWith('mailto:')
 
+        if (!Icon) return null
+
         return (
           <a
             key={link.id}
