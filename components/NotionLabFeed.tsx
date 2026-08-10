@@ -35,7 +35,7 @@ interface FeedItem {
 // lib/notion.ts's hydrateGroupedCollectionViews). Reads rows directly out of
 // the recordMap already fetched for the page, so no extra requests.
 export function NotionLabFeed({ block, ctx }: any) {
-  const { recordMap, mapPageUrl } = ctx
+  const { recordMap } = ctx
 
   const items = React.useMemo<FeedItem[]>(() => {
     const collectionId = getBlockCollectionId(block, recordMap)
@@ -114,7 +114,13 @@ export function NotionLabFeed({ block, ctx }: any) {
             {group.items.map((item) => (
               <li key={item.id} className={styles.item}>
                 <a
-                  href={item.externalUrl || mapPageUrl(item.id, recordMap)}
+                  // The site's title-based slug URLs (mapPageUrl) only
+                  // resolve for pages the sitemap crawler actually walks —
+                  // it doesn't reach into rows of a database nested this
+                  // deep inside a page, so those 404. Linking with the raw
+                  // page id instead skips slug/sitemap lookup entirely:
+                  // resolveNotionPage recognizes a valid id immediately.
+                  href={item.externalUrl || `/${item.id}`}
                   target={item.externalUrl ? '_blank' : undefined}
                   rel={item.externalUrl ? 'noopener noreferrer' : undefined}
                   className={styles.itemLink}
