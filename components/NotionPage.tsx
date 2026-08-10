@@ -18,6 +18,7 @@ import { useDarkMode } from '@/lib/use-dark-mode'
 import { Footer } from './Footer'
 import { HomeSections } from './HomeSections'
 import { Loading } from './Loading'
+import { NotionLabFeed } from './NotionLabFeed'
 import { Page404 } from './Page404'
 import { PageAside } from './PageAside'
 import { PageHead } from './PageHead'
@@ -30,7 +31,8 @@ export function NotionPage({
   recordMap,
   error,
   pageId,
-  sectionRecordMaps
+  sectionRecordMaps,
+  notionLabRecordMap
 }: types.PageProps) {
   const router = useRouter()
   const lite = useSearchParam('lite')
@@ -47,6 +49,13 @@ export function NotionPage({
     const searchParams = new URLSearchParams(params)
     return site ? mapPageUrl(site, recordMap!, searchParams) : undefined
   }, [site, recordMap, lite])
+
+  // internal links inside the Notion Lab page's own content need to resolve
+  // against *its* recordMap, not the root page's
+  const notionLabMapPageUrl = React.useMemo(() => {
+    if (!site || !notionLabRecordMap) return undefined
+    return mapPageUrl(site, notionLabRecordMap, new URLSearchParams())
+  }, [site, notionLabRecordMap])
 
   const keys = Object.keys(recordMap?.block || {})
   const block = getBlockValue(recordMap?.block?.[keys[0]!])
@@ -138,13 +147,60 @@ export function NotionPage({
     />
   )
 
+  // fullPage on this second renderer would otherwise render a second copy of
+  // the custom brand header (notionRendererComponents.Header) inside the
+  // main pane, on top of the one already rendered by the sidebar's own
+  // fullPage renderer above. Collection is swapped for a custom grouped list
+  // (NotionLabFeed) — react-notion-x's own table/gallery UI looks like a raw
+  // spreadsheet and can't reliably render Notion's own grouped view this
+  // deep inside a page (see lib/notion.ts's hydrateGroupedCollectionViews).
+  const notionLabComponents = {
+    ...notionRendererComponents,
+    Header: () => null,
+    Collection: NotionLabFeed
+  }
+
+  const notionLabRenderer = notionLabRecordMap && (
+    <NotionRenderer
+      bodyClassName={styles.notion}
+      darkMode={isDarkMode}
+      components={notionLabComponents}
+      recordMap={notionLabRecordMap}
+      rootPageId={site.rootNotionPageId}
+      rootDomain={site.domain}
+      fullPage
+      previewImages={!!notionLabRecordMap.preview_images}
+      showCollectionViewDropdown={false}
+      defaultPageIcon={config.defaultPageIcon}
+      defaultPageCover={config.defaultPageCover}
+      defaultPageCoverPosition={config.defaultPageCoverPosition}
+      mapPageUrl={notionLabMapPageUrl}
+      mapImageUrl={mapImageUrl}
+      searchNotion={config.isSearchEnabled ? searchNotion : undefined}
+      footer={<Footer />}
+    />
+  )
+
+  // the /notion-lab route reuses the root page's recordMap/block for the
+  // sidebar identity (photo, name, socials), so title/description here would
+  // otherwise say "Ines Sein Kim" instead of describing this page
+  const notionLabKeys = Object.keys(notionLabRecordMap?.block || {})
+  const notionLabBlock =
+    notionLabRecordMap && getBlockValue(notionLabRecordMap.block[notionLabKeys[0]!])
+  const pageHeadTitle = notionLabRecordMap
+    ? getBlockTitle(notionLabBlock!, notionLabRecordMap) || 'Notion Lab'
+    : title
+  const pageHeadDescription = notionLabRecordMap
+    ? 'Notion tips, templates, and updates — an ongoing archive by Sein Kim.'
+    : socialDescription
+
   return (
     <>
       <PageHead
         pageId={pageId}
         site={site}
-        title={title}
-        description={socialDescription}
+        title={pageHeadTitle}
+        description={pageHeadDescription}
         image={socialImage}
         url={canonicalPageUrl}
         isBlogPost={isBlogPost}
@@ -153,7 +209,17 @@ export function NotionPage({
       {isLiteMode && <BodyClassName className='notion-lite' />}
       {isDarkMode && <BodyClassName className='dark-mode' />}
 
-      {isRootPage ? (
+      {notionLabRecordMap ? (
+        <div className={styles.homeLayout}>
+          <aside className={styles.homeSidebar}>
+            {notionRenderer}
+            <ScrollNav />
+            <SocialLinks />
+          </aside>
+
+          <main className={styles.homePane}>{notionLabRenderer}</main>
+        </div>
+      ) : isRootPage ? (
         <div className={styles.homeLayout}>
           <aside className={styles.homeSidebar}>
             {notionRenderer}

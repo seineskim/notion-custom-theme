@@ -232,6 +232,24 @@
   color: var(--accent-strong);
 }
 
+.duplicateButton {
+  flex-shrink: 0;
+  padding: 0.35em 0.75em;
+  border: 1px solid var(--border-color);
+  border-radius: 6px;
+  font-size: 0.8rem;
+  font-weight: 500;
+  white-space: nowrap;
+  color: var(--fg-color-2);
+  text-decoration: none;
+  transition: border-color 150ms ease, color 150ms ease;
+}
+
+.duplicateButton:hover {
+  border-color: var(--accent-strong);
+  color: var(--accent-strong);
+}
+
 .iconButton {
   display: inline-flex;
   align-items: center;

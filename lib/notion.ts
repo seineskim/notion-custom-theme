@@ -79,14 +79,46 @@ async function hydrateGroupedCollectionViews(
   await pMap(
     collectionInstances,
     async ({ collectionId, collectionViewId }) => {
-      const view = recordMap.collection_view?.[collectionViewId]?.value
+      let view = recordMap.collection_view?.[collectionViewId]?.value
+      // Some views come back from notion-client's own internal hydration
+      // double-wrapped as { value: { value: <record>, role }, role } instead
+      // of single-wrapped like every other recordMap entry — unwrap once
+      // more if `.type` (present on every real view record) is missing but
+      // there's a nested `.value` that has it.
+      if (view && (view as any).type === undefined && (view as any).value) {
+        view = (view as any).value
+      }
+
+      // For a collection_view block referenced only from deep inside a page
+      // (e.g. a database embedded in a Projects-gallery card's own page),
+      // notion-client's initial chunk fetch sometimes comes back with an
+      // empty placeholder for the view (no `.value` at all) — and its own
+      // internal getCollectionData retry doesn't return view data either,
+      // so the placeholder never gets filled in. Fetch the view record
+      // directly so we at least know its type/format.
+      if (!view) {
+        try {
+          const res = await (notion as any).fetch({
+            endpoint: 'getRecordValues',
+            body: { requests: [{ table: 'collection_view', id: collectionViewId }] }
+          })
+          view = res?.results?.[0]?.value
+          if (view) {
+            recordMap.collection_view = {
+              ...recordMap.collection_view,
+              [collectionViewId]: { role: 'reader', value: view }
+            }
+          }
+        } catch (err) {
+          console.error('failed to fetch collection_view record', collectionViewId, err)
+        }
+      }
       if (!view) return
 
       const groupBy =
         (view as any).type === 'board'
           ? (view as any).format?.board_columns_by
           : (view as any).format?.collection_group_by
-      if (!groupBy) return
 
       const existingQuery =
         recordMap.collection_query?.[collectionId]?.[collectionViewId]
@@ -95,7 +127,11 @@ async function hydrateGroupedCollectionViews(
         Object.keys(existingQuery).some(
           (key) => key !== 'collection_group_results'
         )
-      if (alreadyGrouped) return
+      // Even when there's no grouping to fix, a view resolved above via
+      // getRecordValues still needs an actual query — the placeholder view
+      // never had one either.
+      if (groupBy && alreadyGrouped) return
+      if (!groupBy && existingQuery) return
 
       try {
         const collectionData = await notion.getCollectionData(
@@ -111,7 +147,11 @@ async function hydrateGroupedCollectionViews(
         }
         recordMap.collection_view = {
           ...recordMap.collection_view,
-          ...collectionData.recordMap.collection_view
+          ...collectionData.recordMap.collection_view,
+          // getCollectionData's response doesn't reliably echo back the
+          // view record for deeply-nested views, so keep the one we
+          // resolved above rather than let an empty merge erase it.
+          [collectionViewId]: { role: 'reader', value: view }
         }
         recordMap.collection_query = {
           ...recordMap.collection_query,

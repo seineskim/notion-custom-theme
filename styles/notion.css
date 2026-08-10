@@ -481,3 +481,16 @@ div:has(> .notion-simple-table) {
   max-width: 100%;
   overflow-x: auto;
 }
+
+/* react-notion-x's database table view sizes itself to `100vw` (the full
+ * browser viewport), assuming it's the page's primary content — inside our
+ * narrower sidebar layout that pushes it past the content column and off
+ * the edge of the page instead of scrolling in place. Cap it to its actual
+ * container and let its own `overflow: auto hidden` handle the scrollbar. */
+.notion-table,
+.notion-table-view {
+  width: 100% !important;
+  max-width: 100% !important;
+  min-width: 0 !important;
+  float: none !important;
+}

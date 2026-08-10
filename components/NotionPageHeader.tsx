@@ -1,10 +1,11 @@
-import Link from 'next/link'
 import type * as types from 'notion-types'
 import cs from 'classnames'
+import Link from 'next/link'
 import * as React from 'react'
 import { Search, useNotionContext } from 'react-notion-x'
 
 import { isSearchEnabled, name, navigationLinks } from '@/lib/config'
+import { notionLabCollectionId } from '@/lib/home-sections'
 import { MoonIcon } from '@/lib/icons/moon'
 import { SunIcon } from '@/lib/icons/sun'
 import { useDarkMode } from '@/lib/use-dark-mode'
@@ -32,6 +33,29 @@ function ToggleThemeButton() {
     >
       {hasMounted && isDarkMode ? <MoonIcon /> : <SunIcon />}
     </button>
+  )
+}
+
+function DuplicateButton({
+  block
+}: {
+  block: types.CollectionViewPageBlock | types.PageBlock
+}) {
+  const isNotionLabArticle =
+    (block as any).parent_table === 'collection' &&
+    (block as any).parent_id === notionLabCollectionId
+
+  if (!isNotionLabArticle) return null
+
+  return (
+    <a
+      href={`https://www.notion.so/${block.id.replaceAll('-', '')}?duplicate=true`}
+      target='_blank'
+      rel='noopener noreferrer'
+      className={styles.duplicateButton}
+    >
+      Duplicate
+    </a>
   )
 }
 
@@ -79,6 +103,8 @@ export function NotionPageHeader({
               }
             })
             .filter(Boolean)}
+
+          <DuplicateButton block={block} />
 
           <ToggleThemeButton />
 
