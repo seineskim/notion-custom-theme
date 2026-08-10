@@ -13,7 +13,7 @@ export function ScrollNav() {
   const isHome = router.pathname === '/'
 
   // scrollspy only makes sense on the home page, where the sections actually
-  // live in the DOM to observe — elsewhere (e.g. /notion-lab) there's nothing
+  // live in the DOM to observe — elsewhere (e.g. /notion-blog) there's nothing
   // to watch, so skip it and fall back to plain route-based active state
   const activeSectionId = useActiveSection(isHome ? homeSections.map((s) => s.id) : [])
 

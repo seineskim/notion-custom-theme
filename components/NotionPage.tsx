@@ -181,7 +181,7 @@ export function NotionPage({
     />
   )
 
-  // the /notion-lab route reuses the root page's recordMap/block for the
+  // the /notion-blog route reuses the root page's recordMap/block for the
   // sidebar identity (photo, name, socials), so title/description here would
   // otherwise say "Ines Sein Kim" instead of describing this page
   const notionLabKeys = Object.keys(notionLabRecordMap?.block || {})

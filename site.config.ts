@@ -38,6 +38,14 @@ export default siteConfig({
   // environment variables. see the readme for more info
   isRedisEnabled: false,
 
+  // Keep the raw Notion id in generated URLs, in prod too (default: only in
+  // dev). Without it, a link to any page the sitemap crawler doesn't reach —
+  // e.g. a row of a database nested inside a page, like the Notion Blog
+  // articles or react-notion-x's own built-in Search results — 404s, since
+  // resolving a title-only slug back to a page id depends on that crawl.
+  // A raw id in the URL resolves directly, without needing the sitemap.
+  includeNotionIdInUrls: true,
+
   // map of notion page IDs to URL paths (optional)
   // any pages defined here will override their default URL paths
   // example:

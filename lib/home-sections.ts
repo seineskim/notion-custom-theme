@@ -23,7 +23,7 @@ export const homeSections: HomeSection[] = [
   }
 ]
 
-// The B2B/Notion-expertise archive lives on its own route (/notion-lab)
+// The B2B/Notion-expertise archive lives on its own route (/notion-blog)
 // rather than as a fourth scrollable home section — it's a different kind of
 // content (an ongoing, growing archive) from the About/Experience/Projects
 // personal narrative, so it gets its own page while reusing the same sidebar.
@@ -31,7 +31,7 @@ export const homeSections: HomeSection[] = [
 // Advocate"), which holds the real Notion Lab 콘텐츠 허브 database — not the
 // separate "Notion Lab" card, which only has an empty duplicate/linked view.
 export const notionLabPageId = '1ffe6a8154768070bf69f963924ae157'
-export const notionLabPath = '/notion-lab'
+export const notionLabPath = '/notion-blog'
 
 // The "Notion Lab 콘텐츠 허브" database itself — used to detect when the
 // current page is one of its rows (e.g. to show a "Duplicate" link in the

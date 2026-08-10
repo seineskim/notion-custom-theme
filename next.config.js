@@ -31,5 +31,16 @@ export default {
   // },
 
   // See https://react-tweet.vercel.app/next#troubleshooting
-  transpilePackages: ['react-tweet']
+  transpilePackages: ['react-tweet'],
+
+  // /notion-lab briefly went live before being renamed to /notion-blog
+  async redirects() {
+    return [
+      {
+        source: '/notion-lab',
+        destination: '/notion-blog',
+        permanent: true
+      }
+    ]
+  }
 }

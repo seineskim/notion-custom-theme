@@ -19,7 +19,7 @@ export interface PageProps {
   // only present for the root/home page: recordMaps for each scrollable
   // home section (About / Experience / Projects), keyed by section id
   sectionRecordMaps?: Record<string, ExtendedRecordMap>
-  // only present for the /notion-lab route: the Notion Lab page's own
+  // only present for the /notion-blog route: the Notion Lab page's own
   // recordMap, rendered in the main pane alongside the shared home sidebar
   notionLabRecordMap?: ExtendedRecordMap
 }

@@ -1,5 +1,6 @@
 import {
   type ExtendedRecordMap,
+  type RecordMap,
   type SearchParams,
   type SearchResults
 } from 'notion-types'
@@ -203,6 +204,26 @@ export async function getPage(pageId: string): Promise<ExtendedRecordMap> {
   return recordMap
 }
 
+// Notion's search endpoint returns recordMap.block entries double-wrapped —
+// { value: { value: <realBlock>, role }, role } instead of the usual single
+// wrap every other recordMap ({ value: <realBlock>, role }) uses (same class
+// of bug as hydrateGroupedCollectionViews's collection_view records). React-
+// notion-x's Search component reads block.type directly off entry.value to
+// build result titles, so a wrong level unwraps to undefined and it silently
+// drops every result — search box always looked empty. Search isn't one of
+// react-notion-x's swappable components, so this has to be fixed in the data
+// before it reaches the client.
+function normalizeSearchRecordMapBlocks(recordMap: RecordMap): void {
+  for (const id of Object.keys(recordMap.block || {})) {
+    const entry = recordMap.block[id] as any
+    if (entry?.value && entry.value.type === undefined && entry.value.value) {
+      entry.value = entry.value.value
+    }
+  }
+}
+
 export async function search(params: SearchParams): Promise<SearchResults> {
-  return notion.search(params)
+  const results = await notion.search(params)
+  normalizeSearchRecordMapBlocks(results.recordMap)
+  return results
 }

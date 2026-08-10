@@ -16,11 +16,11 @@ export const getStaticProps = async () => {
 
     return { props: { ...props, notionLabRecordMap }, revalidate: 10 }
   } catch (err) {
-    console.error('notion-lab page error', domain, err)
+    console.error('notion-blog page error', domain, err)
     throw err
   }
 }
 
-export default function NotionLabPage(props: PageProps) {
+export default function NotionBlogPage(props: PageProps) {
   return <NotionPage {...props} />
 }
