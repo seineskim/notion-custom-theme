@@ -79,11 +79,9 @@
   box-shadow: none;
 }
 
-/* When a card has no actual cover image, react-notion-x still renders the
- * cover wrapper (fixed 190px/124px tall) around an empty placeholder div —
- * hide the whole wrapper in that case so cardless entries don't reserve a
- * big blank grey box. */
-.notion-collection-card-cover:has(.notion-collection-card-cover-empty) {
+/* Project cards look cleaner as plain text entries — hide the cover
+ * (whether it's an actual image or react-notion-x's empty placeholder). */
+.notion-collection-card-cover {
   display: none;
 }
 
@@ -112,6 +110,23 @@
 
 .notion-collection-card-body {
   padding: 10px;
+}
+
+/* An inline link inside a title (e.g. "Personal Portfolio Site (sein.kim)")
+ * is rendered by react-notion-x as a native <input type="submit"> button —
+ * browsers don't have inputs inherit font-size/family from their parent by
+ * default, so it fell back to the tiny UA form-control font instead of
+ * matching the surrounding heading text. */
+.nested-form-link {
+  font: inherit;
+  color: inherit;
+}
+
+/* The <input> is wrapped in a <form> that defaults to display: block, which
+ * breaks it onto its own line instead of flowing with the surrounding
+ * title text (e.g. the "(" and ")" around it). */
+form:has(> .nested-form-link) {
+  display: inline;
 }
 
 /* only target safari */
