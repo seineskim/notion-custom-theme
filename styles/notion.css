@@ -45,6 +45,13 @@
 
 .notion-gallery-grid {
   grid-template-columns: repeat(auto-fill, minmax(360px, 1fr));
+  /* react-notion-x's default `grid-auto-rows: 1fr` equalizes every row to
+   * the tallest card's content, so hiding an empty cover on a short card
+   * (see .notion-collection-card-cover-empty above) still left it stretched
+   * to match a much longer card elsewhere in the grid. Size each row to its
+   * own row's content instead. */
+  grid-auto-rows: auto;
+  align-items: start;
   grid-gap: 6vmin;
   gap: 6vmin;
 }
@@ -70,6 +77,14 @@
 .notion-collection-card {
   border-radius: 16px;
   box-shadow: none;
+}
+
+/* When a card has no actual cover image, react-notion-x still renders the
+ * cover wrapper (fixed 190px/124px tall) around an empty placeholder div —
+ * hide the whole wrapper in that case so cardless entries don't reserve a
+ * big blank grey box. */
+.notion-collection-card-cover:has(.notion-collection-card-cover-empty) {
+  display: none;
 }
 
 .notion-collection-card-cover img {
