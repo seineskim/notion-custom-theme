@@ -3,7 +3,8 @@ import { getBlockCollectionId, getBlockTitle, getBlockValue } from 'notion-utils
 import pMemoize from 'p-memoize'
 
 import { notionLabCollectionId, notionLabPageId } from './home-sections'
-import { getCollectionViewRows, getPage } from './notion'
+import { getPage } from './notion'
+import { getCollectionViewRows } from './notion-collection'
 import { makeNotionLabSlug } from './slug'
 
 export interface NotionLabSlugEntry {

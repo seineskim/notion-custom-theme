@@ -174,34 +174,6 @@ async function hydrateGroupedCollectionViews(
   )
 }
 
-// Resolves a collection view's actual row blocks, trying each of its
-// view_ids in turn. A *grouped* view's query only ever resolves to its group
-// labels (`table_groups`), never flat row ids (see
-// hydrateGroupedCollectionViews above) — so this falls through to another
-// view rather than come up empty if the first/default view happens to be
-// grouped. Shared by components/NotionLabFeed.tsx (rendering the list) and
-// lib/notion-lab.ts (resolving short-slug URLs), which both need the exact
-// same row set for a given collection view block.
-export function getCollectionViewRows(
-  recordMap: ExtendedRecordMap,
-  collectionId: string,
-  viewIds: string[]
-): any[] {
-  let blockIds: string[] = []
-  for (const viewId of viewIds) {
-    const result = (recordMap.collection_query as any)?.[collectionId]?.[viewId]
-      ?.collection_group_results
-    if (result?.blockIds?.length) {
-      blockIds = result.blockIds
-      break
-    }
-  }
-
-  return blockIds
-    .map((id) => getBlockValue(recordMap.block[id]))
-    .filter((row: any) => row && row.alive !== false)
-}
-
 export async function getPage(pageId: string): Promise<ExtendedRecordMap> {
   let recordMap = await notion.getPage(pageId)
 

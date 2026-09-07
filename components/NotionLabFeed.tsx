@@ -1,7 +1,7 @@
 import { getBlockCollectionId, getBlockTitle, getPageProperty } from 'notion-utils'
 import * as React from 'react'
 
-import { getCollectionViewRows } from '@/lib/notion'
+import { getCollectionViewRows } from '@/lib/notion-collection'
 import { makeNotionLabSlug } from '@/lib/slug'
 
 import styles from './NotionLabFeed.module.css'
