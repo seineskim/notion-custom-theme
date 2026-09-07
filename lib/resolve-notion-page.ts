@@ -7,7 +7,7 @@ import { environment, pageUrlAdditions, pageUrlOverrides, site } from './config'
 import { db } from './db'
 import { getSiteMap } from './get-site-map'
 import { getPage } from './notion'
-import { getNotionLabSlugMap } from './notion-lab'
+import { getNotionLabIdToSlugMap, getNotionLabSlugMap } from './notion-lab'
 
 export async function resolveNotionPage(
   domain: string,
@@ -104,6 +104,13 @@ export async function resolveNotionPage(
     recordMap = await getPage(pageId)
   }
 
-  const props: PageProps = { site, recordMap, pageId }
+  // Fetched for every page (not just Notion Blog articles themselves) since
+  // any page's content can contain an inline page-link mention pointing at
+  // one — see lib/get-canonical-page-id.ts, which is where this actually
+  // gets consulted. Already memoized (lib/notion-lab.ts), so this is cheap
+  // on top of the getPage() call above.
+  const notionLabIdToSlugMap = await getNotionLabIdToSlugMap()
+
+  const props: PageProps = { site, recordMap, pageId, notionLabIdToSlugMap }
   return { ...props, ...(await acl.pageAcl(props)) }
 }

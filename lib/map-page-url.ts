@@ -10,7 +10,12 @@ import { type Site } from './types'
 const uuid = !!includeNotionIdInUrls
 
 export const mapPageUrl =
-  (site: Site, recordMap: ExtendedRecordMap, searchParams: URLSearchParams) =>
+  (
+    site: Site,
+    recordMap: ExtendedRecordMap,
+    searchParams: URLSearchParams,
+    notionLabIdToSlugMap?: Record<string, string>
+  ) =>
   (pageId = '') => {
     const pageUuid = parsePageId(pageId, { uuid: true })!
 
@@ -18,14 +23,18 @@ export const mapPageUrl =
       return createUrl('/', searchParams)
     } else {
       return createUrl(
-        `/${getCanonicalPageId(pageUuid, recordMap, { uuid })}`,
+        `/${getCanonicalPageId(pageUuid, recordMap, { uuid, notionLabIdToSlugMap })}`,
         searchParams
       )
     }
   }
 
 export const getCanonicalPageUrl =
-  (site: Site, recordMap: ExtendedRecordMap) =>
+  (
+    site: Site,
+    recordMap: ExtendedRecordMap,
+    notionLabIdToSlugMap?: Record<string, string>
+  ) =>
   (pageId = '') => {
     const pageUuid = parsePageId(pageId, { uuid: true })!
 
@@ -33,7 +42,8 @@ export const getCanonicalPageUrl =
       return `https://${site.domain}`
     } else {
       return `https://${site.domain}/${getCanonicalPageId(pageUuid, recordMap, {
-        uuid
+        uuid,
+        notionLabIdToSlugMap
       })}`
     }
   }

@@ -32,7 +32,8 @@ export function NotionPage({
   error,
   pageId,
   sectionRecordMaps,
-  notionLabRecordMap
+  notionLabRecordMap,
+  notionLabIdToSlugMap
 }: types.PageProps) {
   const router = useRouter()
   const lite = useSearchParam('lite')
@@ -47,15 +48,22 @@ export function NotionPage({
     if (lite) params.lite = lite
 
     const searchParams = new URLSearchParams(params)
-    return site ? mapPageUrl(site, recordMap!, searchParams) : undefined
-  }, [site, recordMap, lite])
+    return site
+      ? mapPageUrl(site, recordMap!, searchParams, notionLabIdToSlugMap)
+      : undefined
+  }, [site, recordMap, lite, notionLabIdToSlugMap])
 
   // internal links inside the Notion Lab page's own content need to resolve
   // against *its* recordMap, not the root page's
   const notionLabMapPageUrl = React.useMemo(() => {
     if (!site || !notionLabRecordMap) return undefined
-    return mapPageUrl(site, notionLabRecordMap, new URLSearchParams())
-  }, [site, notionLabRecordMap])
+    return mapPageUrl(
+      site,
+      notionLabRecordMap,
+      new URLSearchParams(),
+      notionLabIdToSlugMap
+    )
+  }, [site, notionLabRecordMap, notionLabIdToSlugMap])
 
   const keys = Object.keys(recordMap?.block || {})
   const block = getBlockValue(recordMap?.block?.[keys[0]!])
@@ -107,7 +115,11 @@ export function NotionPage({
 
   const canonicalPageUrl = config.isDev
     ? undefined
-    : getCanonicalPageUrl(site, recordMap)(pageId)
+    : getCanonicalPageUrl(
+        site,
+        recordMap,
+        notionLabIdToSlugMap
+      )(pageId)
 
   const socialImage = mapImageUrl(
     getPageProperty<string>('Social Image', block, recordMap) ||

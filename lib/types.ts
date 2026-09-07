@@ -22,6 +22,11 @@ export interface PageProps {
   // only present for the /notion-blog route: the Notion Lab page's own
   // recordMap, rendered in the main pane alongside the shared home sidebar
   notionLabRecordMap?: ExtendedRecordMap
+  // Notion Blog article id -> short slug (lib/notion-lab.ts), fetched once
+  // per request in lib/resolve-notion-page.ts and threaded through so every
+  // link-generating path (mapPageUrl instances, canonical/og tags) agrees on
+  // the same short URL for these pages, not just the /notion-blog feed list.
+  notionLabIdToSlugMap?: Record<string, string>
 }
 
 export interface ExtendedTweetRecordMap extends ExtendedRecordMap {
