@@ -244,16 +244,41 @@ function dedupeSlugCollisions(
   return result
 }
 
-async function getNotionLabSlugEntries(): Promise<NotionLabSlugEntry[]> {
+// Vercel doesn't guarantee two requests reuse the same warm Lambda instance
+// (each has its own copy of every in-memory cache above), so a short timeout
+// here is only safe for callers where a temporarily-incomplete answer just
+// means "slightly stale" — not for the one place (lib/resolve-notion-page.ts
+// checking whether an incoming URL matches a slug) where an incomplete
+// answer means "page not found". That result becomes the page's *cached*
+// getStaticProps output (revalidate: 10) — a false 404 from hitting the
+// timeout gets served back as truth by Next's ISR cache to everyone else
+// until it happens to regenerate on a Lambda whose nested-walk cache is
+// already warm, which nothing guarantees. Confirmed in production: a nested-
+// subpage article 404'd for 50+ seconds (well past both the 1.5s timeout and
+// the 10s revalidate window) because repeated requests kept landing on cold
+// instances. So: no timeout when resolving an incoming URL (worth waiting
+// the full cold cost once to get a *correct* cached result), a short one
+// only for canonical/outbound link generation elsewhere, where the
+// alternative to "slightly stale" is never a hard 404.
+async function getNotionLabSlugEntries(
+  nestedEntriesTimeoutMs?: number
+): Promise<NotionLabSlugEntry[]> {
   const { entries: rowEntries } = await getNotionLabRowEntries()
-  const nestedEntries = await withTimeout(
-    getNotionLabNestedEntries(),
-    1500,
-    [] as NotionLabSlugEntry[]
-  )
+  const nestedEntriesPromise = getNotionLabNestedEntries()
+  const nestedEntries =
+    nestedEntriesTimeoutMs === undefined
+      ? await nestedEntriesPromise
+      : await withTimeout(
+          nestedEntriesPromise,
+          nestedEntriesTimeoutMs,
+          [] as NotionLabSlugEntry[]
+        )
   return dedupeSlugCollisions([...rowEntries, ...nestedEntries])
 }
 
+// Used to check whether an incoming request path matches a Notion Blog
+// article's slug (lib/resolve-notion-page.ts) — see the no-timeout reasoning
+// above.
 export async function getNotionLabSlugMap(): Promise<Record<string, string>> {
   const entries = await getNotionLabSlugEntries()
   const map: Record<string, string> = {}
@@ -261,13 +286,16 @@ export async function getNotionLabSlugMap(): Promise<Record<string, string>> {
   return map
 }
 
-// Reverse of getNotionLabSlugMap — page id -> short slug. Used to redirect
-// visitors landing on an article's old raw-id URL (shared/indexed before
-// short slugs existed) to the canonical short-slug URL.
+// Reverse of getNotionLabSlugMap — page id -> short slug. Used for canonical
+// URL / outbound link generation (lib/get-canonical-page-id.ts) and to
+// redirect visitors landing on an article's old raw-id URL (shared/indexed
+// before short slugs existed) to the canonical short-slug URL — both places
+// where a temporarily-stale answer is an acceptable trade for speed, unlike
+// getNotionLabSlugMap above.
 export async function getNotionLabIdToSlugMap(): Promise<
   Record<string, string>
 > {
-  const entries = await getNotionLabSlugEntries()
+  const entries = await getNotionLabSlugEntries(1500)
   const map: Record<string, string> = {}
   for (const entry of entries) map[entry.id] = entry.slug
   return map
