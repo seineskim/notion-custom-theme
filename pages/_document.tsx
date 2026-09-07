@@ -34,20 +34,6 @@ export default class MyDocument extends Document {
           <script
             dangerouslySetInnerHTML={{
               __html: `
-window.addEventListener('error', function (e) {
-  window.__hydrationDebug = window.__hydrationDebug || [];
-  window.__hydrationDebug.push({ type: 'error', message: e.message, stack: e.error && e.error.stack });
-});
-window.addEventListener('unhandledrejection', function (e) {
-  window.__hydrationDebug = window.__hydrationDebug || [];
-  window.__hydrationDebug.push({ type: 'rejection', message: String(e.reason), stack: e.reason && e.reason.stack });
-});
-`
-            }}
-          />
-          <script
-            dangerouslySetInnerHTML={{
-              __html: `
 /** Inlined version of noflash.js from use-dark-mode */
 ;(function () {
   var storageKey = 'darkMode'
