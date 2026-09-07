@@ -35,6 +35,11 @@ export function ScrollNav() {
           <Link
             key={section.id}
             href={isHome ? `#${section.id}` : `/#${section.id}`}
+            // Off the home page (e.g. on /notion-blog) this points at `/`,
+            // which would otherwise prefetch home's ~589KB recordMap JSON
+            // just for being visible in the sidebar — same reasoning as the
+            // Notion Blog link below.
+            prefetch={false}
             className={cs(styles.item, isActive && styles.itemActive)}
             aria-current={isActive}
             onClick={(event) => onSectionClick(event, section.id)}
@@ -49,6 +54,13 @@ export function ScrollNav() {
 
       <Link
         href={notionLabPath}
+        // This link sits in the sidebar on every page that renders it (home,
+        // /notion-blog itself), so Next.js's default hover/viewport
+        // prefetching was silently downloading the /notion-blog route's
+        // ~930KB recordMap JSON in the background on every one of those
+        // page loads — a large chunk of bandwidth/parse time for a page the
+        // visitor hasn't actually asked for yet.
+        prefetch={false}
         className={cs(
           styles.item,
           router.pathname === notionLabPath && styles.itemActive

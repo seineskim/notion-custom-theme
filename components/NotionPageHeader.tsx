@@ -69,7 +69,11 @@ export function NotionPageHeader({
   return (
     <header className='notion-header'>
       <div className={styles.headerInner}>
-        <Link href='/' className={styles.brand}>
+        {/* This header (and so this link) is on every article page — the
+            site's most numerous page type — so Next.js's default prefetch
+            was downloading the home page's ~589KB recordMap JSON in the
+            background on every single article view. */}
+        <Link href='/' className={styles.brand} prefetch={false}>
           {name}
         </Link>
 
