@@ -192,6 +192,58 @@ function withTimeout<T>(promise: Promise<T>, ms: number, fallback: T): Promise<T
   ])
 }
 
+// Notion generates related pages (a database's rows, a batch of subpages
+// created from a template) with sequential/similar ids, so two entries can
+// end up with the same 6-char id suffix and therefore the identical slug —
+// found in practice: 3 collisions across ~52 entries. A silent collision
+// means whichever entry comes last in the array wins the slug and the other
+// becomes unreachable (or resolves to the wrong page). Regenerate every
+// colliding entry's slug with a longer suffix so it's unique again.
+function dedupeSlugCollisions(
+  entries: NotionLabSlugEntry[]
+): NotionLabSlugEntry[] {
+  const bySlug = new Map<string, NotionLabSlugEntry[]>()
+  for (const entry of entries) {
+    const group = bySlug.get(entry.slug)
+    if (group) group.push(entry)
+    else bySlug.set(entry.slug, [entry])
+  }
+
+  const collidingGroups = [...bySlug.values()].filter(
+    (group) => group.length > 1
+  )
+  if (!collidingGroups.length) return entries
+
+  const longerSlugById = new Map<string, string>()
+  for (const group of collidingGroups) {
+    console.warn(
+      `[notion-lab] slug collision "${group[0]!.slug}" — lengthening id suffix for:`,
+      group.map((entry) => `${entry.id} (${entry.title})`)
+    )
+    for (const entry of group) {
+      longerSlugById.set(entry.id, makeNotionLabSlug(entry.title, entry.id, 10))
+    }
+  }
+
+  const result = entries.map((entry) =>
+    longerSlugById.has(entry.id)
+      ? { ...entry, slug: longerSlugById.get(entry.id)! }
+      : entry
+  )
+
+  const stillColliding = result.some(
+    (entry, index) =>
+      result.findIndex((other) => other.slug === entry.slug) !== index
+  )
+  if (stillColliding) {
+    console.error(
+      '[notion-lab] slug collision persisted after lengthening the id suffix — needs a manual look'
+    )
+  }
+
+  return result
+}
+
 async function getNotionLabSlugEntries(): Promise<NotionLabSlugEntry[]> {
   const { entries: rowEntries } = await getNotionLabRowEntries()
   const nestedEntries = await withTimeout(
@@ -199,7 +251,7 @@ async function getNotionLabSlugEntries(): Promise<NotionLabSlugEntry[]> {
     1500,
     [] as NotionLabSlugEntry[]
   )
-  return [...rowEntries, ...nestedEntries]
+  return dedupeSlugCollisions([...rowEntries, ...nestedEntries])
 }
 
 export async function getNotionLabSlugMap(): Promise<Record<string, string>> {

@@ -26,13 +26,24 @@ function truncateSlug(slug: string, maxLen: number): string {
 
 // Short suffix from the page id so slugs stay unique even when two titles
 // collide or truncate down to the same prefix (e.g. all-Korean titles, which
-// slugify() strips down to nothing).
-function shortIdSuffix(pageId: string): string {
-  return pageId.replaceAll('-', '').slice(0, 6)
+// slugify() strips down to nothing). Takes it from the *end* of the id, not
+// the start: Notion generates a batch of related pages (a database's rows, a
+// template's subpages) with a shared prefix and only the tail actually
+// varies — confirmed against this workspace's real ids, where the first 12
+// characters were identical across an entire colliding group even after
+// widening the prefix-based suffix to 10 chars. lib/notion-lab.ts's
+// dedupeSlugCollisions() calls this again with a longer suffixLength for any
+// pair that still collides regardless.
+function shortIdSuffix(pageId: string, suffixLength: number): string {
+  return pageId.replaceAll('-', '').slice(-suffixLength)
 }
 
-export function makeNotionLabSlug(title: string, pageId: string): string {
+export function makeNotionLabSlug(
+  title: string,
+  pageId: string,
+  suffixLength = 6
+): string {
   const base = truncateSlug(slugify(title), AUTO_SLUG_MAX_LEN)
-  const suffix = shortIdSuffix(pageId)
+  const suffix = shortIdSuffix(pageId, suffixLength)
   return base ? `${base}-${suffix}` : suffix
 }

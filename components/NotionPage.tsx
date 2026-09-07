@@ -1,7 +1,12 @@
 import cs from 'classnames'
 import { useRouter } from 'next/router'
 import { type PageBlock } from 'notion-types'
-import { getBlockTitle, getBlockValue, getPageProperty } from 'notion-utils'
+import {
+  getBlockTitle,
+  getBlockValue,
+  getPageProperty,
+  parsePageId
+} from 'notion-utils'
 import * as React from 'react'
 import BodyClassName from 'react-body-classname'
 import { NotionRenderer } from 'react-notion-x'
@@ -70,8 +75,19 @@ export function NotionPage({
 
   const isRootPage = pageId === site?.rootNotionPageId
 
+  // A Notion Blog article isn't always a 콘텐츠 허브 database row
+  // (parent_table "collection") — some are plain subpages nested under the
+  // Notion Blog page itself (lib/notion-lab.ts walks that whole subtree).
+  // Without this OR, PageAside.tsx treats those as a regular non-blog page
+  // and renders the floating social-share widget (PageSocial) instead of
+  // the blog-post behavior (comments/page-actions, or nothing).
+  const pageIdDashed = pageId && parsePageId(pageId, { uuid: true })
+  const isNotionLabArticle = !!(
+    pageIdDashed && notionLabIdToSlugMap?.[pageIdDashed]
+  )
   const isBlogPost =
-    block?.type === 'page' && block?.parent_table === 'collection'
+    (block?.type === 'page' && block?.parent_table === 'collection') ||
+    isNotionLabArticle
 
   const showTableOfContents = !!isBlogPost
   const minTableOfContentsItems = 3
@@ -169,7 +185,9 @@ export function NotionPage({
   const notionLabComponents = {
     ...notionRendererComponents,
     Header: () => null,
-    Collection: NotionLabFeed
+    Collection: (collectionProps: any) => (
+      <NotionLabFeed {...collectionProps} idToSlugMap={notionLabIdToSlugMap} />
+    )
   }
 
   const notionLabRenderer = notionLabRecordMap && (

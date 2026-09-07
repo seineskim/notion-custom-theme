@@ -33,7 +33,19 @@ interface FeedItem {
 // inside a page, can't reliably render Notion's own grouped view — see
 // lib/notion.ts's hydrateGroupedCollectionViews). Reads rows directly out of
 // the recordMap already fetched for the page, so no extra requests.
-export function NotionLabFeed({ block, ctx }: any) {
+//
+// idToSlugMap (lib/notion-lab.ts's getNotionLabIdToSlugMap, injected via
+// components/NotionPage.tsx) is the single source of truth for slugs —
+// makeNotionLabSlug() is only a fallback for a row that map doesn't have yet
+// (e.g. published moments ago, before the 10-minute cache refreshed).
+// Computing slugs independently here would disagree with lib/notion-lab.ts's
+// dedupeSlugCollisions() whenever two rows' ids happen to share the same
+// short id suffix, silently linking one of them to the wrong page.
+export function NotionLabFeed({
+  block,
+  ctx,
+  idToSlugMap
+}: any) {
   const { recordMap } = ctx
 
   const items = React.useMemo<FeedItem[]>(() => {
@@ -48,7 +60,7 @@ export function NotionLabFeed({ block, ctx }: any) {
       return {
         id: row.id,
         title,
-        slug: makeNotionLabSlug(title, row.id),
+        slug: idToSlugMap?.[row.id] || makeNotionLabSlug(title, row.id),
         type:
           (getPageProperty<string>('콘텐츠 유형', row, recordMap) as string) ||
           'No 콘텐츠 유형',
@@ -56,7 +68,7 @@ export function NotionLabFeed({ block, ctx }: any) {
           (getPageProperty<string>('URL', row, recordMap) as string) || null
       }
     })
-  }, [block, recordMap])
+  }, [block, recordMap, idToSlugMap])
 
   const groups = React.useMemo(() => {
     const byType = new Map<string, FeedItem[]>()
