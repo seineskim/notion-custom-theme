@@ -3,6 +3,7 @@ import { type GetStaticProps } from 'next'
 import { NotionPage } from '@/components/NotionPage'
 import { domain, isDev, pageUrlOverrides } from '@/lib/config'
 import { getSiteMap } from '@/lib/get-site-map'
+import { getNotionLabSlugMap } from '@/lib/notion-lab'
 import { resolveNotionPage } from '@/lib/resolve-notion-page'
 import { type PageProps, type Params } from '@/lib/types'
 
@@ -33,13 +34,16 @@ export async function getStaticPaths() {
   }
 
   const siteMap = await getSiteMap()
+  const notionLabSlugMap = await getNotionLabSlugMap()
 
-  // Combine sitemap paths with URL overrides (e.g., /articles, /notes)
-  // URL overrides might not be in the sitemap if not directly linked from root
+  // Combine sitemap paths with URL overrides (e.g., /articles, /notes) and
+  // Notion Blog article short slugs. URL overrides / Notion Lab slugs might
+  // not be in the sitemap if not directly linked from root.
   const allPageIds = [
     ...new Set([
       ...Object.keys(siteMap.canonicalPageMap),
-      ...Object.keys(pageUrlOverrides)
+      ...Object.keys(pageUrlOverrides),
+      ...Object.keys(notionLabSlugMap)
     ])
   ]
 

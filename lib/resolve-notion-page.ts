@@ -7,6 +7,7 @@ import { environment, pageUrlAdditions, pageUrlOverrides, site } from './config'
 import { db } from './db'
 import { getSiteMap } from './get-site-map'
 import { getPage } from './notion'
+import { getNotionLabSlugMap } from './notion-lab'
 
 export async function resolveNotionPage(
   domain: string,
@@ -26,6 +27,19 @@ export async function resolveNotionPage(
 
       if (override) {
         pageId = parsePageId(override)!
+      }
+    }
+
+    if (!pageId) {
+      // Notion Blog article short slugs (see components/NotionLabFeed.tsx
+      // and lib/notion-lab.ts) — checked before the sitemap-crawl fallback
+      // below since these rows live nested inside a database the crawler
+      // never reaches.
+      const notionLabSlugMap = await getNotionLabSlugMap()
+      const notionLabPageId = notionLabSlugMap[rawPageId]
+
+      if (notionLabPageId) {
+        pageId = parsePageId(notionLabPageId)!
       }
     }
 

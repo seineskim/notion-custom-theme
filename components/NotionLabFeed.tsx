@@ -1,10 +1,8 @@
-import {
-  getBlockCollectionId,
-  getBlockTitle,
-  getBlockValue,
-  getPageProperty
-} from 'notion-utils'
+import { getBlockCollectionId, getBlockTitle, getPageProperty } from 'notion-utils'
 import * as React from 'react'
+
+import { getCollectionViewRows } from '@/lib/notion'
+import { makeNotionLabSlug } from '@/lib/slug'
 
 import styles from './NotionLabFeed.module.css'
 
@@ -24,6 +22,7 @@ const CONTENT_TYPE_ORDER = [
 interface FeedItem {
   id: string
   title: string
+  slug: string
   type: string
   externalUrl: string | null
 }
@@ -42,34 +41,21 @@ export function NotionLabFeed({ block, ctx }: any) {
     const viewIds: string[] = block?.view_ids || []
     if (!collectionId || !viewIds.length) return []
 
-    // Don't assume view_ids[0] is a flat, usable result — a *grouped* view's
-    // query only ever resolves to its group labels (`table_groups`), never
-    // actual row ids (see lib/notion.ts's hydrateGroupedCollectionViews), so
-    // if the database's first/default view happens to be grouped this needs
-    // to fall through to another view rather than come up empty.
-    let blockIds: string[] = []
-    for (const viewId of viewIds) {
-      const result =
-        recordMap.collection_query?.[collectionId]?.[viewId]
-          ?.collection_group_results
-      if (result?.blockIds?.length) {
-        blockIds = result.blockIds
-        break
-      }
-    }
+    const rows = getCollectionViewRows(recordMap, collectionId, viewIds)
 
-    return blockIds
-      .map((id) => getBlockValue(recordMap.block[id]))
-      .filter((row: any) => row && row.alive !== false)
-      .map((row: any) => ({
+    return rows.map((row: any) => {
+      const title = getBlockTitle(row, recordMap) || '(제목 없음)'
+      return {
         id: row.id,
-        title: getBlockTitle(row, recordMap) || '(제목 없음)',
+        title,
+        slug: makeNotionLabSlug(title, row.id),
         type:
           (getPageProperty<string>('콘텐츠 유형', row, recordMap) as string) ||
           'No 콘텐츠 유형',
         externalUrl:
           (getPageProperty<string>('URL', row, recordMap) as string) || null
-      }))
+      }
+    })
   }, [block, recordMap])
 
   const groups = React.useMemo(() => {
@@ -117,10 +103,11 @@ export function NotionLabFeed({ block, ctx }: any) {
                   // The site's title-based slug URLs (mapPageUrl) only
                   // resolve for pages the sitemap crawler actually walks —
                   // it doesn't reach into rows of a database nested this
-                  // deep inside a page, so those 404. Linking with the raw
-                  // page id instead skips slug/sitemap lookup entirely:
-                  // resolveNotionPage recognizes a valid id immediately.
-                  href={item.externalUrl || `/${item.id}`}
+                  // deep inside a page, so those 404. This short slug skips
+                  // that entirely: lib/resolve-notion-page.ts resolves it
+                  // via lib/notion-lab.ts's slug map, independent of the
+                  // sitemap crawl.
+                  href={item.externalUrl || `/${item.slug}`}
                   target={item.externalUrl ? '_blank' : undefined}
                   rel={item.externalUrl ? 'noopener noreferrer' : undefined}
                   className={styles.itemLink}
