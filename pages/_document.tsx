@@ -1,5 +1,7 @@
 import Document, { Head, Html, Main, NextScript } from 'next/document'
 
+import { gaId } from '@/lib/config'
+
 export default class MyDocument extends Document {
   override render() {
     return (
@@ -9,6 +11,23 @@ export default class MyDocument extends Document {
           <link rel='icon' type='image/png' sizes='32x32' href='favicon.png' />
 
           <link rel='manifest' href='/manifest.json' />
+
+          {/* GA4. _app.tsx의 useEffect가 클라이언트에서 하이드레이션되지 않는
+              문제가 있어 React를 거치지 않는 고전적인 방식으로 직접 심는다 —
+              페이지가 파싱되는 즉시 실행되므로 하이드레이션 여부와 무관하다. */}
+          {gaId && (
+            <>
+              <script
+                async
+                src={`https://www.googletagmanager.com/gtag/js?id=${gaId}`}
+              />
+              <script
+                dangerouslySetInnerHTML={{
+                  __html: `window.dataLayer=window.dataLayer||[];function gtag(){dataLayer.push(arguments);}gtag('js',new Date());gtag('config','${gaId}');`
+                }}
+              />
+            </>
+          )}
         </Head>
 
         <body>

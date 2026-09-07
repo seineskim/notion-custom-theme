@@ -23,13 +23,11 @@ import { bootstrap } from '@/lib/bootstrap-client'
 import {
   fathomConfig,
   fathomId,
-  gaId,
   isServer,
   posthogConfig,
   posthogId
 } from '@/lib/config'
 import { bodyFont, headingFont } from '@/lib/fonts'
-import { gaPageview, loadGA } from '@/lib/ga'
 
 if (!isServer) {
   bootstrap()
@@ -47,10 +45,6 @@ export default function App({ Component, pageProps }: AppProps) {
       if (posthogId) {
         posthog.capture('$pageview')
       }
-
-      if (gaId) {
-        gaPageview(router.asPath)
-      }
     }
 
     if (fathomId) {
@@ -59,11 +53,6 @@ export default function App({ Component, pageProps }: AppProps) {
 
     if (posthogId) {
       posthog.init(posthogId, posthogConfig)
-    }
-
-    if (gaId) {
-      loadGA(gaId)
-      gaPageview(router.asPath)
     }
 
     router.events.on('routeChangeComplete', onRouteChangeComplete)
