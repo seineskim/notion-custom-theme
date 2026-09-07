@@ -6,10 +6,12 @@ import {
   getBlockValue,
   parsePageId
 } from 'notion-utils'
+import pMap from 'p-map'
 import pMemoize from 'p-memoize'
 
 import { notionLabCollectionId, notionLabPageId } from './home-sections'
 import { getPage } from './notion'
+import { notion } from './notion-api'
 import { getCollectionViewRows } from './notion-collection'
 import { makeNotionLabSlug } from './slug'
 
@@ -32,6 +34,13 @@ const MAX_NESTED_PAGES = 200
 // fetching a subpage's own recordMap only when it needs to see further
 // inside it (its immediate parent's recordMap already has its block entry,
 // but not necessarily its own children).
+//
+// Uses the raw notion-client fetch directly (not lib/notion.ts's getPage)
+// with the same "just enough to walk the tree" options
+// lib/notion.ts's getNavigationLinkPages() already uses: no collection
+// hydration, no missing-block backfill, no file-URL signing. The first
+// version of this used the full getPage() per subpage and took 15+ seconds
+// cold — nearly all of it collection/image work this walk never needed.
 async function collectNestedPageEntries(
   rootRecordMap: ExtendedRecordMap,
   rootDashedId: string,
@@ -39,46 +48,76 @@ async function collectNestedPageEntries(
 ): Promise<NotionLabSlugEntry[]> {
   const results: NotionLabSlugEntry[] = []
   const visited = new Set<string>([rootDashedId])
-  const queue: Array<{ id: string; recordMap: ExtendedRecordMap }> = [
+  let currentLevel: Array<{ id: string; recordMap: ExtendedRecordMap }> = [
     { id: rootDashedId, recordMap: rootRecordMap }
   ]
 
-  while (queue.length && visited.size < MAX_NESTED_PAGES) {
-    const { id, recordMap } = queue.shift()!
-    const block = getBlockValue(recordMap.block[id] as any)
-    if (!block) continue
+  // Breadth-first, one level at a time, fetching every subpage discovered
+  // in that level *in parallel* (concurrency 4, matching the pattern
+  // lib/notion.ts already uses for collection hydration) — a sequential
+  // await per subpage was the actual cause of a multi-second slowdown on
+  // every page load once the tree grew past a handful of subpages.
+  while (currentLevel.length && visited.size < MAX_NESTED_PAGES) {
+    const childIdsToFetch: string[] = []
 
-    for (const childId of block.content || []) {
-      if (visited.has(childId)) continue
-      visited.add(childId)
+    for (const { id, recordMap } of currentLevel) {
+      const block = getBlockValue(recordMap.block[id] as any)
+      if (!block) continue
 
-      const child = getBlockValue(recordMap.block[childId] as any)
-      if (!child || child.type !== 'page' || child.alive === false) continue
+      for (const childId of block.content || []) {
+        if (visited.has(childId)) continue
+        visited.add(childId)
 
-      if (!excludeIds.has(child.id)) {
-        const title = getBlockTitle(child, recordMap) || '(제목 없음)'
-        results.push({
-          id: child.id,
-          title,
-          slug: makeNotionLabSlug(title, child.id)
-        })
-      }
+        const child = getBlockValue(recordMap.block[childId] as any)
+        if (!child || child.type !== 'page' || child.alive === false) continue
 
-      try {
-        const childRecordMap = await getPage(childId)
-        queue.push({ id: childId, recordMap: childRecordMap })
-      } catch (err) {
-        console.error('failed to fetch nested notion lab subpage', childId, err)
+        if (!excludeIds.has(child.id)) {
+          const title = getBlockTitle(child, recordMap) || '(제목 없음)'
+          results.push({
+            id: child.id,
+            title,
+            slug: makeNotionLabSlug(title, child.id)
+          })
+        }
+
+        childIdsToFetch.push(childId)
       }
     }
+
+    if (!childIdsToFetch.length) break
+
+    const fetched = await pMap(
+      childIdsToFetch,
+      async (childId) => {
+        try {
+          const childRecordMap = await notion.getPage(childId, {
+            chunkLimit: 1,
+            fetchMissingBlocks: false,
+            fetchCollections: false,
+            signFileUrls: false
+          })
+          return { id: childId, recordMap: childRecordMap }
+        } catch (err) {
+          console.error('failed to fetch nested notion lab subpage', childId, err)
+          return null
+        }
+      },
+      { concurrency: 6 }
+    )
+
+    currentLevel = fetched.filter(
+      (entry): entry is { id: string; recordMap: ExtendedRecordMap } =>
+        entry !== null
+    )
   }
 
   return results
 }
 
-async function fetchNotionLabSlugEntriesUncached(): Promise<
-  NotionLabSlugEntry[]
-> {
+async function fetchNotionLabRowEntriesUncached(): Promise<{
+  recordMap: ExtendedRecordMap
+  entries: NotionLabSlugEntry[]
+}> {
   const recordMap = await getPage(notionLabPageId)
 
   let collectionViewBlock: any
@@ -108,27 +147,60 @@ async function fetchNotionLabSlugEntriesUncached(): Promise<
     return { id: row.id, title, slug: makeNotionLabSlug(title, row.id) }
   })
 
+  return { recordMap, entries }
+}
+
+// The 콘텐츠 허브 database rows — one getPage() call (plus its own
+// collection hydration), same cost this always had before the nested-subpage
+// walk existed. Kept as its own memoized step so a slow nested walk (below)
+// can never hold this back.
+const getNotionLabRowEntries = pMemoize(fetchNotionLabRowEntriesUncached, {
+  cache: new ExpiryMap(600_000)
+})
+
+async function fetchNotionLabNestedEntriesUncached(): Promise<
+  NotionLabSlugEntry[]
+> {
+  const { recordMap, entries } = await getNotionLabRowEntries()
+
   // recordMap.block is keyed by dashed ids — notionLabPageId (lib/home-sections.ts)
   // is stored dash-less, which getPage() above accepts fine for fetching but
   // doesn't match this object's keys, so it has to be normalized first.
   const notionLabPageDashedId = parsePageId(notionLabPageId, { uuid: true })!
   const seenIds = new Set(entries.map((entry) => entry.id))
-  const nestedEntries = await collectNestedPageEntries(
-    recordMap,
-    notionLabPageDashedId,
-    seenIds
-  )
 
-  return [...entries, ...nestedEntries]
+  return collectNestedPageEntries(recordMap, notionLabPageDashedId, seenIds)
 }
 
-// Notion Blog article slugs are derived from live Notion data on every
-// lookup (no separate sync step, see components/NotionLabFeed.tsx), so this
-// is memoized briefly to avoid re-fetching + re-walking the whole database
-// on every single page request that isn't a raw page id.
-const getNotionLabSlugEntries = pMemoize(fetchNotionLabSlugEntriesUncached, {
-  cache: new ExpiryMap(60_000)
-})
+// Deliberately separate from getNotionLabRowEntries: walking the nested
+// subpage tree costs one Notion API round-trip per subpage (even at
+// concurrency 6, a tree with a few dozen subpages took 10+ seconds cold —
+// unacceptable to make every page load wait on). getNotionLabSlugEntries
+// below bounds how long it'll wait for this with a timeout and falls back
+// to just the row entries; this promise keeps running regardless, so once
+// it resolves the *next* lookup (within the cache TTL) gets the full set
+// instantly.
+const getNotionLabNestedEntries = pMemoize(
+  fetchNotionLabNestedEntriesUncached,
+  { cache: new ExpiryMap(600_000) }
+)
+
+function withTimeout<T>(promise: Promise<T>, ms: number, fallback: T): Promise<T> {
+  return Promise.race([
+    promise,
+    new Promise<T>((resolve) => setTimeout(() => resolve(fallback), ms))
+  ])
+}
+
+async function getNotionLabSlugEntries(): Promise<NotionLabSlugEntry[]> {
+  const { entries: rowEntries } = await getNotionLabRowEntries()
+  const nestedEntries = await withTimeout(
+    getNotionLabNestedEntries(),
+    1500,
+    [] as NotionLabSlugEntry[]
+  )
+  return [...rowEntries, ...nestedEntries]
+}
 
 export async function getNotionLabSlugMap(): Promise<Record<string, string>> {
   const entries = await getNotionLabSlugEntries()
