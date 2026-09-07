@@ -3,7 +3,6 @@ import { type GetStaticProps } from 'next'
 import { NotionPage } from '@/components/NotionPage'
 import { domain, isDev, pageUrlOverrides } from '@/lib/config'
 import { getSiteMap } from '@/lib/get-site-map'
-import { getNotionLabSlugMap } from '@/lib/notion-lab'
 import { resolveNotionPage } from '@/lib/resolve-notion-page'
 import { type PageProps, type Params } from '@/lib/types'
 
@@ -34,16 +33,23 @@ export async function getStaticPaths() {
   }
 
   const siteMap = await getSiteMap()
-  const notionLabSlugMap = await getNotionLabSlugMap()
 
-  // Combine sitemap paths with URL overrides (e.g., /articles, /notes) and
-  // Notion Blog article short slugs. URL overrides / Notion Lab slugs might
-  // not be in the sitemap if not directly linked from root.
+  // Combine sitemap paths with URL overrides (e.g., /articles, /notes)
+  // URL overrides might not be in the sitemap if not directly linked from root.
+  //
+  // Notion Blog article short slugs (lib/notion-lab.ts) are deliberately NOT
+  // pre-rendered here — resolving all of them up front means fetching every
+  // article's full page + grouped-collection data during every build, which
+  // is enough Notion API traffic to trip its rate limiter and fail the whole
+  // build (seen in practice: a 429 on an unrelated page aborted the export).
+  // fallback: true + the 10s revalidate below already resolve these slugs
+  // correctly on first visit via lib/resolve-notion-page.ts, just not
+  // pre-built — the Notion API load is spread out over real traffic instead
+  // of one build-time burst.
   const allPageIds = [
     ...new Set([
       ...Object.keys(siteMap.canonicalPageMap),
-      ...Object.keys(pageUrlOverrides),
-      ...Object.keys(notionLabSlugMap)
+      ...Object.keys(pageUrlOverrides)
     ])
   ]
 
