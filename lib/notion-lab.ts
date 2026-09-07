@@ -59,3 +59,15 @@ export async function getNotionLabSlugMap(): Promise<Record<string, string>> {
   for (const entry of entries) map[entry.slug] = entry.id
   return map
 }
+
+// Reverse of getNotionLabSlugMap — page id -> short slug. Used to redirect
+// visitors landing on an article's old raw-id URL (shared/indexed before
+// short slugs existed) to the canonical short-slug URL.
+export async function getNotionLabIdToSlugMap(): Promise<
+  Record<string, string>
+> {
+  const entries = await getNotionLabSlugEntries()
+  const map: Record<string, string> = {}
+  for (const entry of entries) map[entry.id] = entry.slug
+  return map
+}

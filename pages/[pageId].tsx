@@ -1,8 +1,10 @@
 import { type GetStaticProps } from 'next'
+import { parsePageId } from 'notion-utils'
 
 import { NotionPage } from '@/components/NotionPage'
 import { domain, isDev, pageUrlOverrides } from '@/lib/config'
 import { getSiteMap } from '@/lib/get-site-map'
+import { getNotionLabIdToSlugMap } from '@/lib/notion-lab'
 import { resolveNotionPage } from '@/lib/resolve-notion-page'
 import { type PageProps, type Params } from '@/lib/types'
 
@@ -10,6 +12,24 @@ export const getStaticProps: GetStaticProps<PageProps, Params> = async (
   context
 ) => {
   const rawPageId = context.params?.pageId as string
+
+  // Notion Blog article links used to be the raw page id (see
+  // components/NotionLabFeed.tsx's history) — any of those already
+  // shared/bookmarked/indexed should permanently redirect to the new short
+  // slug rather than just quietly still working, so they consolidate onto
+  // one canonical URL. parsePageId only matches a full raw Notion id, so
+  // this never fires for an already-short slug.
+  const parsedRawId = parsePageId(rawPageId)
+  if (parsedRawId) {
+    const idToSlug = await getNotionLabIdToSlugMap()
+    const canonicalSlug = idToSlug[parsedRawId]
+
+    if (canonicalSlug) {
+      return {
+        redirect: { destination: `/${canonicalSlug}`, permanent: true }
+      }
+    }
+  }
 
   try {
     const props = await resolveNotionPage(domain, rawPageId)
