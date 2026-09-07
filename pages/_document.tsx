@@ -73,6 +73,43 @@ export default class MyDocument extends Document {
           />
           <Main />
 
+          {/* 섹션별 관심도. react-notion-x가 만드는 h1~h3(.notion-h, data-id=블록ID)를
+              읽기 위치 근처에서 관찰하다가 처음 지나갈 때 한 번만 GA4로 전송한다.
+              <Main/> 바로 뒤에 둬서, 이 스크립트가 실행되는 시점엔 이미 본문 헤딩이
+              전부 파싱되어 있다 (하이드레이션 완료 여부와 무관 — _app.tsx의 useEffect가
+              항상 붙는다는 보장이 없어서 React에 기대지 않는다). */}
+          {gaId && (
+            <script
+              dangerouslySetInnerHTML={{
+                __html: `
+;(function () {
+  if (typeof window.gtag !== 'function') return
+  var headings = document.querySelectorAll('.notion-h[data-id]')
+  if (!headings.length) return
+  var seen = {}
+  var observer = new IntersectionObserver(function (entries) {
+    entries.forEach(function (entry) {
+      if (!entry.isIntersecting) return
+      var el = entry.target
+      var id = el.getAttribute('data-id')
+      if (seen[id]) return
+      seen[id] = true
+      var levelMatch = el.className.match(/notion-h([1-3])/)
+      window.gtag('event', 'section_view', {
+        page_path: location.pathname,
+        section_id: id,
+        section_title: (el.textContent || '').trim().slice(0, 100),
+        section_level: levelMatch ? 'h' + levelMatch[1] : ''
+      })
+    })
+  }, { rootMargin: '-15% 0px -70% 0px', threshold: 0 })
+  headings.forEach(function (h) { observer.observe(h) })
+})();
+`
+              }}
+            />
+          )}
+
           <NextScript />
         </body>
       </Html>
