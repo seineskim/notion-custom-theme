@@ -140,11 +140,39 @@ form:has(> .nested-form-link) {
 }
 
 .notion-quote {
-  padding: 0.2em 0.75em;
-  line-height: 1.5;
+  padding: 0.75em 1.1em;
+  line-height: 1.6;
   font-style: italic;
-  font-size: 1.2em;
+  font-size: 1.05em;
+  color: var(--fg-color);
+  background: var(--bg-color-2);
   border-left: 4px solid var(--accent-strong);
+  border-radius: 8px;
+}
+
+/* Notion lets an author color a quote block per-page (the sky-blue seen
+ * above came from picking "Blue background" in Notion) — react-notion-x
+ * renders that as one of these classes alongside .notion-quote, each with
+ * its own hardcoded background. Override all of them so a quote's color
+ * always matches the site's palette regardless of what was picked in
+ * Notion, rather than fixing it block-by-block there.
+ *
+ * border-radius is repeated here (not just relying on the .notion-quote
+ * rule above) because the *_background classes are also used bare, for
+ * inline text highlights, with their own border-bottom-left-radius further
+ * down this file — same specificity as plain .notion-quote, so on source
+ * order alone it would win that one corner back off a plain quote. */
+.notion-quote.notion-red_background,
+.notion-quote.notion-pink_background,
+.notion-quote.notion-blue_background,
+.notion-quote.notion-purple_background,
+.notion-quote.notion-teal_background,
+.notion-quote.notion-yellow_background,
+.notion-quote.notion-orange_background,
+.notion-quote.notion-brown_background,
+.notion-quote.notion-gray_background {
+  background: var(--bg-color-2);
+  border-radius: 8px;
 }
 
 .notion-h1,
