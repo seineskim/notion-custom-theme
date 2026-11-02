@@ -21,19 +21,24 @@ export function getCollectionViewRows(
   { applyViewFilter = true }: { applyViewFilter?: boolean } = {}
 ): any[] {
   let blockIds: string[] = []
-  let viewFilter: any
   for (const viewId of viewIds) {
     const result = (recordMap.collection_query as any)?.[collectionId]?.[
       viewId
     ]?.collection_group_results
     if (result?.blockIds?.length) {
       blockIds = result.blockIds
-      if (applyViewFilter) {
-        viewFilter = getViewRecord(recordMap, viewId)?.query2?.filter
-      }
       break
     }
   }
+
+  // The rows above come back unfiltered whichever view they came from (see
+  // matchesViewFilter), so filter by the block's *first* view — the one the
+  // page actually shows — even when that view is grouped and the rows had to
+  // be borrowed from a later one.
+  const viewFilter =
+    applyViewFilter && viewIds[0]
+      ? getViewRecord(recordMap, viewIds[0])?.query2?.filter
+      : undefined
 
   const schema = getBlockValue(recordMap.collection?.[collectionId] as any)
     ?.schema
