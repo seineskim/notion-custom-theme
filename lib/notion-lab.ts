@@ -134,11 +134,14 @@ async function fetchNotionLabRowEntriesUncached(): Promise<{
     }
   }
 
+  // Every published row needs a slug, including ones this particular view
+  // filters out (e.g. POC 자료실 articles, listed from their own page).
   const rows = collectionViewBlock
     ? getCollectionViewRows(
         recordMap,
         notionLabCollectionId,
-        collectionViewBlock.view_ids || []
+        collectionViewBlock.view_ids || [],
+        { applyViewFilter: false }
       )
     : []
 

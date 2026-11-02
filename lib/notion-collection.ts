@@ -17,15 +17,20 @@ import { getBlockValue } from 'notion-utils'
 export function getCollectionViewRows(
   recordMap: ExtendedRecordMap,
   collectionId: string,
-  viewIds: string[]
+  viewIds: string[],
+  { applyViewFilter = true }: { applyViewFilter?: boolean } = {}
 ): any[] {
   let blockIds: string[] = []
+  let viewFilter: any
   for (const viewId of viewIds) {
     const result = (recordMap.collection_query as any)?.[collectionId]?.[
       viewId
     ]?.collection_group_results
     if (result?.blockIds?.length) {
       blockIds = result.blockIds
+      if (applyViewFilter) {
+        viewFilter = getViewRecord(recordMap, viewId)?.query2?.filter
+      }
       break
     }
   }
@@ -36,7 +41,63 @@ export function getCollectionViewRows(
   return blockIds
     .map((id) => getBlockValue(recordMap.block[id]))
     .filter((row: any) => row && row.alive !== false)
+    .filter((row: any) => matchesViewFilter(row, viewFilter))
     .filter((row: any) => isPublished(row, schema))
+}
+
+function getViewRecord(recordMap: ExtendedRecordMap, viewId: string): any {
+  let view: any = (recordMap.collection_view as any)?.[viewId]?.value
+  // see lib/notion.ts — some views come back double-wrapped
+  if (view && view.type === undefined && view.value) view = view.value
+  return view
+}
+
+// notion-client's collection query ignores a view's query2.filter (the form
+// Notion's newer filter UI and API write), so a linked view filtered to one
+// slice of the 콘텐츠 허브 — e.g. the POC 자료실 page's view, or the
+// /notion-blog view that leaves those POC rows out — still comes back with
+// every row. Re-apply the filter here. Covers the select/status/checkbox/
+// emptiness operators these views use; anything else is treated as a match
+// rather than risk hiding rows that should show.
+function matchesViewFilter(row: any, filter: any): boolean {
+  if (!filter) return true
+
+  if (Array.isArray(filter.filters)) {
+    const results = filter.filters.map((child: any) =>
+      matchesViewFilter(row, child)
+    )
+    if (!results.length) return true
+    return filter.operator === 'or'
+      ? results.some(Boolean)
+      : results.every(Boolean)
+  }
+
+  const operator = filter.filter?.operator
+  const expected = filter.filter?.value?.value
+  const raw = row.properties?.[filter.property]
+  const value = raw?.[0]?.[0]
+  const isEmpty = !raw || !value
+
+  switch (operator) {
+    case 'is_empty':
+      return isEmpty
+    case 'is_not_empty':
+      return !isEmpty
+    case 'enum_is':
+    case 'status_is':
+      return value === expected
+    case 'enum_is_not':
+    case 'status_is_not':
+      return value !== expected
+    case 'enum_contains':
+      return String(value ?? '')
+        .split(',')
+        .includes(expected)
+    case 'checkbox_is':
+      return (value === 'Yes') === Boolean(expected)
+    default:
+      return true
+  }
 }
 
 // Whether a database row may appear on the site. In the 콘텐츠 허브 the
