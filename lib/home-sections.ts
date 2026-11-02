@@ -34,6 +34,5 @@ export const notionLabPageId = '1ffe6a8154768070bf69f963924ae157'
 export const notionLabPath = '/notion-blog'
 
 // The "Notion Lab 콘텐츠 허브" database itself — used to detect when the
-// current page is one of its rows (e.g. to show a "Duplicate" link in the
-// header that only makes sense on that database's own articles).
+// current page is one of its rows.
 export const notionLabCollectionId = '1fbe6a81-5476-8014-8ad1-000b9635b789'
