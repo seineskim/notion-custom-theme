@@ -5,7 +5,7 @@ import { notionLabPageId } from '@/lib/home-sections'
 import { getPage } from '@/lib/notion'
 import {
   hideInternalProperties,
-  removeUnshareableRows
+  removeUnpublishedRows
 } from '@/lib/notion-collection'
 import { resolveNotionPage } from '@/lib/resolve-notion-page'
 
@@ -17,7 +17,7 @@ export const getStaticProps = async () => {
     // separately and rendered in the main pane.
     const props = await resolveNotionPage(domain)
     const notionLabRecordMap = hideInternalProperties(
-      removeUnshareableRows(await getPage(notionLabPageId))
+      removeUnpublishedRows(await getPage(notionLabPageId))
     )
 
     return { props: { ...props, notionLabRecordMap }, revalidate: 10 }

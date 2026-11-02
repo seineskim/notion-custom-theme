@@ -4,7 +4,7 @@ import pMemoize from 'p-memoize'
 
 import { rootNotionPageId } from './config'
 import { notion } from './notion-api'
-import { isExternallyShareable } from './notion-collection'
+import { isPublished } from './notion-collection'
 
 // lib/notion-api.ts authenticates as a real logged-in user (token_v2), so
 // getPage() can read *any* page that user can see — including private
@@ -14,7 +14,8 @@ import { isExternallyShareable } from './notion-collection'
 //
 // Walks the page's parent chain (block → collection → block …) and only
 // allows pages that actually live under site.rootNotionPageId. Database rows
-// marked 외부공유 = 불가 are rejected along the way.
+// that aren't published (lib/notion-collection.ts's isPublished — 상태 ≠ 발행 완료
+// or 외부공유 = 불가) are rejected along the way.
 const MAX_DEPTH = 30
 
 async function getRecord(table: 'block' | 'collection', id: string) {
@@ -39,7 +40,7 @@ async function isPageInsideSiteUncached(pageId: string): Promise<boolean> {
     if (table === 'block' && value.parent_table === 'collection') {
       const collection: any = await getRecord('collection', value.parent_id)
       if (!collection) return false
-      if (!isExternallyShareable(value, collection.schema)) return false
+      if (!isPublished(value, collection.schema)) return false
 
       // continue from the database block that owns this collection
       table = 'block'
