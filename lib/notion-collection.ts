@@ -14,6 +14,31 @@ import { getBlockValue } from 'notion-utils'
 // same logic, and importing anything from lib/notion.ts there would pull
 // its whole server-only dependency graph (ioredis et al.) into the client
 // bundle and break the build.
+export function getCollectionViewRows(
+  recordMap: ExtendedRecordMap,
+  collectionId: string,
+  viewIds: string[]
+): any[] {
+  let blockIds: string[] = []
+  for (const viewId of viewIds) {
+    const result = (recordMap.collection_query as any)?.[collectionId]?.[
+      viewId
+    ]?.collection_group_results
+    if (result?.blockIds?.length) {
+      blockIds = result.blockIds
+      break
+    }
+  }
+
+  const schema = getBlockValue(recordMap.collection?.[collectionId] as any)
+    ?.schema
+
+  return blockIds
+    .map((id) => getBlockValue(recordMap.block[id]))
+    .filter((row: any) => row && row.alive !== false)
+    .filter((row: any) => isExternallyShareable(row, schema))
+}
+
 // 콘텐츠 허브 rows marked 외부공유 = 불가 must never be published (they're
 // kept in the database for internal use only). Takes the collection schema
 // directly so it works both with a full recordMap and with a bare
@@ -44,27 +69,52 @@ export function removeUnshareableRows(
   return recordMap
 }
 
-export function getCollectionViewRows(
-  recordMap: ExtendedRecordMap,
-  collectionId: string,
-  viewIds: string[]
-): any[] {
-  let blockIds: string[] = []
-  for (const viewId of viewIds) {
-    const result = (recordMap.collection_query as any)?.[collectionId]?.[
-      viewId
-    ]?.collection_group_results
-    if (result?.blockIds?.length) {
-      blockIds = result.blockIds
-      break
-    }
+// Workflow-only properties of the 콘텐츠 허브 (review status, who edited it,
+// sharing flags, a duplicate created-time column). Notion's newer page
+// layout can hide these, but react-notion-x only honors the older
+// collection.format.property_visibility — so mark them hidden there, and
+// blank their values so they don't ship in __NEXT_DATA__ either.
+const INTERNAL_PROPERTY_NAMES = new Set([
+  '상태',
+  '외부공유',
+  '추천 여부',
+  'Created by',
+  'Last edited by',
+  'Created time 1'
+])
+
+export function hideInternalProperties(
+  recordMap: ExtendedRecordMap
+): ExtendedRecordMap {
+  const hiddenByCollection = new Map<string, string[]>()
+
+  for (const [collectionId, entry] of Object.entries(
+    recordMap.collection || {}
+  )) {
+    const collection: any = getBlockValue(entry as any)
+    if (!collection?.schema) continue
+
+    const hidden = Object.entries<any>(collection.schema)
+      .filter(([, property]) => INTERNAL_PROPERTY_NAMES.has(property?.name))
+      .map(([propertyId]) => propertyId)
+    if (!hidden.length) continue
+
+    hiddenByCollection.set(collectionId, hidden)
+    collection.format = collection.format || {}
+    collection.format.property_visibility = [
+      ...(collection.format.property_visibility || []).filter(
+        ({ property }: any) => !hidden.includes(property)
+      ),
+      ...hidden.map((property) => ({ property, visibility: 'hide' }))
+    ]
   }
 
-  const schema = getBlockValue(recordMap.collection?.[collectionId] as any)
-    ?.schema
+  for (const entry of Object.values(recordMap.block)) {
+    const row: any = getBlockValue(entry as any)
+    const hidden = hiddenByCollection.get(row?.parent_id)
+    if (!hidden || !row.properties) continue
+    for (const propertyId of hidden) delete row.properties[propertyId]
+  }
 
-  return blockIds
-    .map((id) => getBlockValue(recordMap.block[id]))
-    .filter((row: any) => row && row.alive !== false)
-    .filter((row: any) => isExternallyShareable(row, schema))
+  return recordMap
 }

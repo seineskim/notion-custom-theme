@@ -7,6 +7,10 @@ import { environment, pageUrlAdditions, pageUrlOverrides, site } from './config'
 import { db } from './db'
 import { getSiteMap } from './get-site-map'
 import { getPage } from './notion'
+import {
+  hideInternalProperties,
+  removeUnshareableRows
+} from './notion-collection'
 import { getNotionLabIdToSlugMap, getNotionLabSlugMap } from './notion-lab'
 import { isPageInsideSite } from './page-ancestry'
 
@@ -120,6 +124,10 @@ export async function resolveNotionPage(
   // gets consulted. Already memoized (lib/notion-lab.ts), so this is cheap
   // on top of the getPage() call above.
   const notionLabIdToSlugMap = await getNotionLabIdToSlugMap()
+
+  // Drop unshareable rows first: hideInternalProperties blanks the 외부공유
+  // value that isExternallyShareable reads.
+  hideInternalProperties(removeUnshareableRows(recordMap))
 
   const props: PageProps = { site, recordMap, pageId, notionLabIdToSlugMap }
   return { ...props, ...(await acl.pageAcl(props)) }
