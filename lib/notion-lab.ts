@@ -156,9 +156,12 @@ async function fetchNotionLabRowEntriesUncached(): Promise<{
 // The 콘텐츠 허브 database rows — one getPage() call (plus its own
 // collection hydration), same cost this always had before the nested-subpage
 // walk existed. Kept as its own memoized step so a slow nested walk (below)
-// can never hold this back.
+// can never hold this back. Only published rows get a slug (getCollectionViewRows
+// drops the rest, so drafts' titles never reach the client), which makes this
+// TTL the delay between flipping 상태 to 발행 완료 and the article's URL
+// resolving — keep it short.
 const getNotionLabRowEntries = pMemoize(fetchNotionLabRowEntriesUncached, {
-  cache: new ExpiryMap(600_000)
+  cache: new ExpiryMap(60_000)
 })
 
 async function fetchNotionLabNestedEntriesUncached(): Promise<
