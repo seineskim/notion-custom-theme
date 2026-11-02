@@ -43,6 +43,33 @@
   width: 100% !important;
 }
 
+/* Video blocks created through the Notion API carry no block_aspect_ratio /
+ * block_height, so react-notion-x gives the wrapper neither padding-bottom
+ * nor a height — and the absolutely positioned YouTube embed inside
+ * collapses to 0px. Fall back to 16:9 only when neither was set. */
+.notion-asset-wrapper-video
+  > div:not([style*='padding-bottom']):not([style*='height']) {
+  aspect-ratio: 16 / 9;
+}
+
+/* Inline page mentions inside article text default to a single nowrap,
+ * inline-flex line — with any text before them in the same paragraph or
+ * list item ("함께 읽기: @page") they run off the right edge on phones.
+ * Let them wrap like ordinary link text instead. */
+.notion-page-content-inner .notion-link .notion-page-title {
+  display: inline;
+}
+
+.notion-page-content-inner .notion-link .notion-page-title-text {
+  display: inline;
+  white-space: normal;
+}
+
+.notion-page-content-inner .notion-link .notion-page-icon-inline {
+  display: inline-block;
+  vertical-align: middle;
+}
+
 .notion-gallery-grid {
   grid-template-columns: repeat(auto-fill, minmax(360px, 1fr));
   /* react-notion-x's default `grid-auto-rows: 1fr` equalizes every row to

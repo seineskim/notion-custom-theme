@@ -3,6 +3,7 @@ import { NotionPage } from '@/components/NotionPage'
 import { domain } from '@/lib/config'
 import { notionLabPageId } from '@/lib/home-sections'
 import { getPage } from '@/lib/notion'
+import { removeUnshareableRows } from '@/lib/notion-collection'
 import { resolveNotionPage } from '@/lib/resolve-notion-page'
 
 export const getStaticProps = async () => {
@@ -12,7 +13,9 @@ export const getStaticProps = async () => {
     // the home page exactly. The Notion Lab content itself is fetched
     // separately and rendered in the main pane.
     const props = await resolveNotionPage(domain)
-    const notionLabRecordMap = await getPage(notionLabPageId)
+    const notionLabRecordMap = removeUnshareableRows(
+      await getPage(notionLabPageId)
+    )
 
     return { props: { ...props, notionLabRecordMap }, revalidate: 10 }
   } catch (err) {

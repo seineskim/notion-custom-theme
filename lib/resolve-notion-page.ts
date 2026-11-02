@@ -8,6 +8,7 @@ import { db } from './db'
 import { getSiteMap } from './get-site-map'
 import { getPage } from './notion'
 import { getNotionLabIdToSlugMap, getNotionLabSlugMap } from './notion-lab'
+import { isPageInsideSite } from './page-ancestry'
 
 export async function resolveNotionPage(
   domain: string,
@@ -102,6 +103,15 @@ export async function resolveNotionPage(
 
     console.log(site)
     recordMap = await getPage(pageId)
+  }
+
+  if (pageId !== site.rootNotionPageId && !(await isPageInsideSite(pageId))) {
+    return {
+      error: {
+        message: `Not found "${rawPageId}"`,
+        statusCode: 404
+      }
+    }
   }
 
   // Fetched for every page (not just Notion Blog articles themselves) since
