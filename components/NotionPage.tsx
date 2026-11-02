@@ -2,6 +2,7 @@ import cs from 'classnames'
 import { useRouter } from 'next/router'
 import { type PageBlock } from 'notion-types'
 import {
+  getBlockCollectionId,
   getBlockTitle,
   getBlockValue,
   getPageProperty,
@@ -14,6 +15,7 @@ import { useSearchParam } from 'react-use'
 
 import type * as types from '@/lib/types'
 import * as config from '@/lib/config'
+import { notionLabCollectionId } from '@/lib/home-sections'
 import { mapImageUrl } from '@/lib/map-image-url'
 import { getCanonicalPageUrl, mapPageUrl } from '@/lib/map-page-url'
 import { notionRendererComponents } from '@/lib/notion-components'
@@ -92,6 +94,26 @@ export function NotionPage({
   const showTableOfContents = !!isBlogPost
   const minTableOfContentsItems = 3
 
+  // A linked view of the 콘텐츠 허브 placed on an ordinary page (e.g. the
+  // Notion Enterprise POC 자료실 page, filtered to its own articles) should
+  // look like the /notion-blog feed, not react-notion-x's raw table.
+  const pageComponents = React.useMemo(
+    () => ({
+      ...notionRendererComponents,
+      Collection: (collectionProps: any) =>
+        getBlockCollectionId(collectionProps.block, recordMap!) ===
+        notionLabCollectionId ? (
+          <NotionLabFeed
+            {...collectionProps}
+            idToSlugMap={notionLabIdToSlugMap}
+          />
+        ) : (
+          <notionRendererComponents.Collection {...collectionProps} />
+        )
+    }),
+    [recordMap, notionLabIdToSlugMap]
+  )
+
   const pageAside = React.useMemo(
     () => (
       <PageAside
@@ -155,7 +177,7 @@ export function NotionPage({
         pageId === site.rootNotionPageId && 'index-page'
       )}
       darkMode={isDarkMode}
-      components={notionRendererComponents}
+      components={pageComponents}
       recordMap={recordMap}
       rootPageId={site.rootNotionPageId}
       rootDomain={site.domain}
