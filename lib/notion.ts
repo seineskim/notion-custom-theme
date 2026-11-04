@@ -21,6 +21,7 @@ import {
 import { getTweetsMap } from './get-tweets'
 import { notion } from './notion-api'
 import { getPreviewImageMap } from './preview-images'
+import { pruneUnreachableBlocks } from './prune-record-map'
 
 const getNavigationLinkPages = pMemoize(
   async (): Promise<ExtendedRecordMap[]> => {
@@ -178,6 +179,8 @@ export async function getPage(pageId: string): Promise<ExtendedRecordMap> {
   let recordMap = await notion.getPage(pageId)
 
   await hydrateGroupedCollectionViews(recordMap)
+
+  pruneUnreachableBlocks(recordMap, pageId)
 
   if (navigationStyle !== 'default') {
     // ensure that any pages linked to in the custom navigation header have
