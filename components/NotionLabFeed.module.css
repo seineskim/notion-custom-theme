@@ -272,3 +272,32 @@
 .itemMeta > .sectionBadge + span::before {
   content: none;
 }
+
+/* 모든 글 / Enterprise POC 자료만 — a quieter segmented control than the
+   category tabs below, so the two rows don't read as the same filter. */
+.sections {
+  display: inline-flex;
+  align-self: flex-start;
+  padding: 3px;
+  border: 1px solid var(--border-color);
+  border-radius: 10px;
+  gap: 2px;
+}
+
+.sectionToggle {
+  padding: 0.3em 0.85em;
+  border: none;
+  border-radius: 8px;
+  background: transparent;
+  color: var(--fg-color-2, var(--fg-color));
+  font: inherit;
+  font-size: 0.85rem;
+  line-height: 1.4;
+  cursor: pointer;
+}
+
+.sectionToggle[aria-pressed='true'] {
+  background: var(--bg-color-2);
+  color: var(--accent-strong);
+  font-weight: 600;
+}

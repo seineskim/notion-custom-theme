@@ -22,6 +22,13 @@ const CATEGORIES: { name: string; emoji: string }[] = [
 ]
 const OTHER_CATEGORY = { name: '기타', emoji: '📎' }
 
+// "구분" value of the Enterprise POC rows. They used to live on their own
+// page (🚀 Notion Enterprise POC 자료실) — two places to look confused
+// customers, so they're listed here with everything else, badged, and this
+// toggle (?sec=poc, which the old POC page address redirects to — see
+// next.config.js) narrows the list to them.
+const POC_SECTION = '엔터프라이즈 POC'
+
 // Keyword chips shown under the search box, in this order — a subset of the
 // "키워드" multi-select options picked as the most common first questions
 // customers ask. Chips with no matching article in the current feed are
@@ -51,11 +58,8 @@ interface FeedItem {
   subcategory: string | null
   keywords: string[]
   externalUrl: string | null
-  // "구분" (e.g. 엔터프라이즈 POC) — shown as a badge in search results.
+  // "구분" (e.g. 엔터프라이즈 POC) — shown as a badge.
   section: string | null
-  // Whether the page's own view (its filter) includes this row. Browsing
-  // shows only these; search covers every published row, see below.
-  inView: boolean
   searchText: string
 }
 
@@ -83,6 +87,7 @@ function useUrlFilterState() {
   const [query, setQuery] = React.useState('')
   const [tag, setTag] = React.useState<string | null>(null)
   const [category, setCategory] = React.useState<string | null>(null)
+  const [pocOnly, setPocOnly] = React.useState(false)
   // State, not a ref: the write-back effect below must not run until the
   // render *after* the URL was read — in the mount commit it would still see
   // the empty initial values and wipe the incoming ?tag=… before it applies.
@@ -93,6 +98,7 @@ function useUrlFilterState() {
     setQuery(params.get('q') || '')
     setTag(params.get('tag'))
     setCategory(params.get('cat'))
+    setPocOnly(params.get('sec') === 'poc')
     setReady(true)
   }, [])
 
@@ -104,10 +110,20 @@ function useUrlFilterState() {
     set('q', query.trim() || null)
     set('tag', tag)
     set('cat', category)
+    set('sec', pocOnly ? 'poc' : null)
     window.history.replaceState(window.history.state, '', url.toString())
-  }, [ready, query, tag, category])
+  }, [ready, query, tag, category, pocOnly])
 
-  return { query, setQuery, tag, setTag, category, setCategory }
+  return {
+    query,
+    setQuery,
+    tag,
+    setTag,
+    category,
+    setCategory,
+    pocOnly,
+    setPocOnly
+  }
 }
 
 // Renders the "Notion Lab 콘텐츠 허브" database as a searchable, topic-grouped
@@ -120,12 +136,10 @@ function useUrlFilterState() {
 // page didn't already publish (unpublished rows were stripped server-side by
 // removeUnpublishedRows) can ever match.
 //
-// Search deliberately reaches past the page's own view filter: /notion-blog
-// shows only 구분-less rows and the POC 자료실 only 엔터프라이즈 POC rows, but
-// the basics customers search for first (팀원 초대, 관리자, 권한…) mostly live
-// in the POC set — a blog search for "초대" finding nothing would send them
-// away. Both sets are already public on the site, so search results mix
-// them, badged by 구분; browsing (no query) still shows only the view's rows.
+// Lists every published row regardless of the Notion view's own filter
+// (the blog view hides 구분 = 엔터프라이즈 POC rows): the basics customers
+// look for first (팀원 초대, 관리자, 권한…) mostly live in the POC set, and
+// keeping them on a separate page left customers unsure where to look.
 //
 // idToSlugMap (lib/notion-lab.ts's getNotionLabIdToSlugMap, injected via
 // components/NotionPage.tsx) is the single source of truth for slugs —
@@ -136,19 +150,22 @@ function useUrlFilterState() {
 // short id suffix, silently linking one of them to the wrong page.
 export function NotionLabFeed({ block, ctx, idToSlugMap }: any) {
   const { recordMap } = ctx
-  const { query, setQuery, tag, setTag, category, setCategory } =
-    useUrlFilterState()
+  const {
+    query,
+    setQuery,
+    tag,
+    setTag,
+    category,
+    setCategory,
+    pocOnly,
+    setPocOnly
+  } = useUrlFilterState()
 
   const items = React.useMemo<FeedItem[]>(() => {
     const collectionId = getBlockCollectionId(block, recordMap)
     const viewIds: string[] = block?.view_ids || []
     if (!collectionId || !viewIds.length) return []
 
-    const inView = new Set(
-      getCollectionViewRows(recordMap, collectionId, viewIds).map(
-        (row: any) => row.id
-      )
-    )
     const rows = getCollectionViewRows(recordMap, collectionId, viewIds, {
       applyViewFilter: false
     })
@@ -168,8 +185,7 @@ export function NotionLabFeed({ block, ctx, idToSlugMap }: any) {
         subcategory: getText(row, recordMap, '소분류') || null,
         keywords: getList(row, recordMap, '키워드'),
         externalUrl: getText(row, recordMap, 'URL') || null,
-        section: getText(row, recordMap, '구분') || null,
-        inView: inView.has(row.id)
+        section: getText(row, recordMap, '구분') || null
       }
       return {
         ...item,
@@ -189,24 +205,7 @@ export function NotionLabFeed({ block, ctx, idToSlugMap }: any) {
     })
   }, [block, recordMap, idToSlugMap])
 
-  const viewItems = React.useMemo(
-    () => items.filter((item) => item.inView),
-    [items]
-  )
-
-  const categoryCounts = React.useMemo(() => {
-    const counts = new Map<string, number>()
-    for (const item of viewItems) {
-      counts.set(item.category, (counts.get(item.category) || 0) + 1)
-    }
-    return counts
-  }, [viewItems])
-
-  const categories = React.useMemo(
-    () =>
-      [...CATEGORIES, OTHER_CATEGORY].filter((c) => categoryCounts.get(c.name)),
-    [categoryCounts]
-  )
+  const hasPoc = items.some((item) => item.section === POC_SECTION)
 
   const chips = React.useMemo(() => {
     const present = new Set(items.flatMap((item) => item.keywords))
@@ -217,20 +216,51 @@ export function NotionLabFeed({ block, ctx, idToSlugMap }: any) {
     () => query.split(/\s+/).map(normalize).filter(Boolean),
     [query]
   )
-  const activeCategory = categories.some((c) => c.name === category)
-    ? category
-    : null
   const isSearching = tokens.length > 0 || !!tag
-
-  const filtered = React.useMemo(
+  // Tab counts are taken from the same list the reader will see (search,
+  // keyword and POC toggle applied, category not), so a tab's number
+  // always equals what clicking it shows.
+  const base = React.useMemo(
     () =>
-      (isSearching ? items : viewItems).filter(
+      pocOnly ? items.filter((item) => item.section === POC_SECTION) : items,
+    [items, pocOnly]
+  )
+
+  const matched = React.useMemo(
+    () =>
+      base.filter(
         (item) =>
-          (!activeCategory || item.category === activeCategory) &&
           (!tag || item.keywords.includes(tag)) &&
           tokens.every((token) => item.searchText.includes(token))
       ),
-    [items, viewItems, isSearching, activeCategory, tag, tokens]
+    [base, tag, tokens]
+  )
+
+  const categoryCounts = React.useMemo(() => {
+    const counts = new Map<string, number>()
+    for (const item of matched) {
+      counts.set(item.category, (counts.get(item.category) || 0) + 1)
+    }
+    return counts
+  }, [matched])
+
+  // Tabs come from the whole list (not just matches) so they don't jump
+  // around while typing; a tab with no matches shows 0.
+  const categories = React.useMemo(() => {
+    const present = new Set(base.map((item) => item.category))
+    return [...CATEGORIES, OTHER_CATEGORY].filter((c) => present.has(c.name))
+  }, [base])
+
+  const activeCategory = categories.some((c) => c.name === category)
+    ? category
+    : null
+
+  const filtered = React.useMemo(
+    () =>
+      activeCategory
+        ? matched.filter((item) => item.category === activeCategory)
+        : matched,
+    [matched, activeCategory]
   )
 
   // Browsing (no search): group by topic, or by 소분류 inside one topic.
@@ -268,7 +298,7 @@ export function NotionLabFeed({ block, ctx, idToSlugMap }: any) {
       })
   }, [filtered, isSearching, activeCategory, categories])
 
-  if (!viewItems.length) {
+  if (!items.length) {
     if (process.env.NODE_ENV !== 'production') {
       console.warn(
         '[NotionLabFeed] no rows resolved — collectionId:',
@@ -286,6 +316,7 @@ export function NotionLabFeed({ block, ctx, idToSlugMap }: any) {
     setQuery('')
     setTag(null)
     setCategory(null)
+    setPocOnly(false)
   }
 
   return (
@@ -326,6 +357,27 @@ export function NotionLabFeed({ block, ctx, idToSlugMap }: any) {
           </div>
         )}
 
+        {hasPoc && (
+          <div className={styles.sections} aria-label='자료 범위'>
+            <button
+              type='button'
+              className={styles.sectionToggle}
+              aria-pressed={!pocOnly}
+              onClick={() => setPocOnly(false)}
+            >
+              모든 글
+            </button>
+            <button
+              type='button'
+              className={styles.sectionToggle}
+              aria-pressed={pocOnly}
+              onClick={() => setPocOnly(!pocOnly)}
+            >
+              🚀 Enterprise POC 자료만
+            </button>
+          </div>
+        )}
+
         <div className={styles.tabs} aria-label='카테고리'>
           <button
             type='button'
@@ -333,7 +385,7 @@ export function NotionLabFeed({ block, ctx, idToSlugMap }: any) {
             aria-pressed={!activeCategory}
             onClick={() => setCategory(null)}
           >
-            전체 <span className={styles.tabCount}>{viewItems.length}</span>
+            전체 <span className={styles.tabCount}>{matched.length}</span>
           </button>
           {categories.map((c) => (
             <button
@@ -347,14 +399,14 @@ export function NotionLabFeed({ block, ctx, idToSlugMap }: any) {
             >
               {c.emoji} {c.name}{' '}
               <span className={styles.tabCount}>
-                {categoryCounts.get(c.name)}
+                {categoryCounts.get(c.name) || 0}
               </span>
             </button>
           ))}
         </div>
       </div>
 
-      {isSearching && (
+      {(isSearching || pocOnly) && (
         <p className={styles.resultSummary} aria-live='polite'>
           <span>
             {filtered.length
@@ -424,9 +476,9 @@ export function NotionLabFeed({ block, ctx, idToSlugMap }: any) {
                       {item.description}
                     </span>
                   )}
-                  {(isSearching || item.type) && (
+                  {(isSearching || item.type || item.section) && (
                     <span className={styles.itemMeta}>
-                      {isSearching && item.section && (
+                      {item.section && (
                         <span className={styles.sectionBadge}>
                           {item.section}
                         </span>

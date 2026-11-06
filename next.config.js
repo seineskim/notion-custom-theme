@@ -40,7 +40,19 @@ export default {
         source: '/notion-lab',
         destination: '/notion-blog',
         permanent: true
-      }
+      },
+      // The Enterprise POC 자료실 page was merged into the blog feed — send
+      // its old addresses (possibly shared with customers) to the feed with
+      // the POC filter on. Not permanent, in case it's split out again.
+      ...[
+        '/notion-enterprise-poc-c46ab4',
+        '/3bae6a815476815fbcb5e94203c46ab4',
+        '/3bae6a81-5476-815f-bcb5-e94203c46ab4'
+      ].map((source) => ({
+        source,
+        destination: '/notion-blog?sec=poc',
+        permanent: false
+      }))
     ]
   }
 }
