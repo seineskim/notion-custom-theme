@@ -114,6 +114,29 @@ export function NotionPage({
     [recordMap, notionLabIdToSlugMap]
   )
 
+  // fullPage on the /notion-blog renderer would otherwise render a second
+  // copy of the custom brand header (notionRendererComponents.Header) inside
+  // the main pane, on top of the one already rendered by the sidebar's own
+  // fullPage renderer. Collection is swapped for a custom grouped list
+  // (NotionLabFeed) — react-notion-x's own table/gallery UI looks like a raw
+  // spreadsheet and can't reliably render Notion's own grouped view this
+  // deep inside a page (see lib/notion.ts's hydrateGroupedCollectionViews).
+  // Memoized: a fresh Collection function each render is a new component
+  // type to React, which remounted the feed and threw away its search state.
+  const notionLabComponents = React.useMemo(
+    () => ({
+      ...notionRendererComponents,
+      Header: () => null,
+      Collection: (collectionProps: any) => (
+        <NotionLabFeed
+          {...collectionProps}
+          idToSlugMap={notionLabIdToSlugMap}
+        />
+      )
+    }),
+    [notionLabIdToSlugMap]
+  )
+
   const pageAside = React.useMemo(
     () => (
       <PageAside
@@ -196,21 +219,6 @@ export function NotionPage({
       footer={isRootPage ? null : <Footer />}
     />
   )
-
-  // fullPage on this second renderer would otherwise render a second copy of
-  // the custom brand header (notionRendererComponents.Header) inside the
-  // main pane, on top of the one already rendered by the sidebar's own
-  // fullPage renderer above. Collection is swapped for a custom grouped list
-  // (NotionLabFeed) — react-notion-x's own table/gallery UI looks like a raw
-  // spreadsheet and can't reliably render Notion's own grouped view this
-  // deep inside a page (see lib/notion.ts's hydrateGroupedCollectionViews).
-  const notionLabComponents = {
-    ...notionRendererComponents,
-    Header: () => null,
-    Collection: (collectionProps: any) => (
-      <NotionLabFeed {...collectionProps} idToSlugMap={notionLabIdToSlugMap} />
-    )
-  }
 
   const notionLabRenderer = notionLabRecordMap && (
     <NotionRenderer

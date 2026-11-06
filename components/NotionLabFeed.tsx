@@ -6,86 +6,269 @@ import { makeNotionLabSlug } from '@/lib/slug'
 
 import styles from './NotionLabFeed.module.css'
 
-// Fixed display order for the Notion Lab 콘텐츠 허브's "콘텐츠 유형" categories —
-// matches the select options on the underlying Notion database exactly, so a
-// new category added there needs to be added here too.
-const CONTENT_TYPE_ORDER = [
-  '가이드',
-  '사례/예시',
-  '업데이트/뉴스',
-  '큐레이션',
+// Topic categories, in menu order — must match the "카테고리" select options
+// on the Notion Lab 콘텐츠 허브 exactly (a new option there needs adding
+// here too, or its rows land in "기타"). 연동 sits last on purpose: it's
+// dominated by developer-only Notion API scraps most customers skip.
+const CATEGORIES: { name: string; emoji: string }[] = [
+  { name: '시작하기', emoji: '🌱' },
+  { name: '페이지·문서 작성', emoji: '✍️' },
+  { name: '데이터베이스', emoji: '🗂️' },
+  { name: '협업', emoji: '🤝' },
+  { name: 'AI·자동화', emoji: '🤖' },
+  { name: '관리자·보안', emoji: '🛡️' },
+  { name: '템플릿·사례', emoji: '📋' },
+  { name: '연동', emoji: '🔗' }
+]
+const OTHER_CATEGORY = { name: '기타', emoji: '📎' }
+
+// Keyword chips shown under the search box, in this order — a subset of the
+// "키워드" multi-select options picked as the most common first questions
+// customers ask. Chips with no matching article in the current feed are
+// dropped.
+const FEATURED_KEYWORDS = [
+  '처음시작',
+  '초기세팅',
+  '팀원초대',
+  '관리자',
+  '권한',
+  '데이터베이스',
+  '엑셀대체',
   '템플릿',
-  '활용 팁',
-  'No 콘텐츠 유형'
+  '자동화',
+  '노션AI',
+  '회의록',
+  '연동'
 ]
 
 interface FeedItem {
   id: string
   title: string
   slug: string
-  type: string
+  type: string | null
+  description: string
+  category: string
+  subcategory: string | null
+  keywords: string[]
   externalUrl: string | null
+  // "구분" (e.g. 엔터프라이즈 POC) — shown as a badge in search results.
+  section: string | null
+  // Whether the page's own view (its filter) includes this row. Browsing
+  // shows only these; search covers every published row, see below.
+  inView: boolean
+  searchText: string
 }
 
-// Renders the "Notion Lab 콘텐츠 허브" database as a grouped list matching the
-// site's own design language, instead of react-notion-x's default table/
-// gallery UI (which looks like a raw spreadsheet and, embedded this deep
-// inside a page, can't reliably render Notion's own grouped view — see
-// lib/notion.ts's hydrateGroupedCollectionViews). Reads rows directly out of
-// the recordMap already fetched for the page, so no extra requests.
+// Lowercased with all whitespace removed, so "엑셀 대체" finds "엑셀대체" and
+// "#초대" finds "초대".
+const normalize = (text: string) =>
+  text.toLowerCase().replaceAll(/\s+/g, '').replace(/^#/, '')
+
+function getText(row: any, recordMap: any, name: string): string {
+  const value = getPageProperty<any>(name, row, recordMap)
+  return typeof value === 'string' ? value.trim() : ''
+}
+
+function getList(row: any, recordMap: any, name: string): string[] {
+  const value = getPageProperty<any>(name, row, recordMap)
+  if (!Array.isArray(value)) return []
+  return value.map((v) => String(v).trim()).filter(Boolean)
+}
+
+// Reads ?q= / ?tag= / ?cat= once on mount and mirrors later changes back
+// with replaceState, so a filtered list can be shared as a link without
+// adding a history entry per keystroke. Starts empty so the first client
+// render matches the server-rendered markup.
+function useUrlFilterState() {
+  const [query, setQuery] = React.useState('')
+  const [tag, setTag] = React.useState<string | null>(null)
+  const [category, setCategory] = React.useState<string | null>(null)
+  // State, not a ref: the write-back effect below must not run until the
+  // render *after* the URL was read — in the mount commit it would still see
+  // the empty initial values and wipe the incoming ?tag=… before it applies.
+  const [ready, setReady] = React.useState(false)
+
+  React.useEffect(() => {
+    const params = new URLSearchParams(window.location.search)
+    setQuery(params.get('q') || '')
+    setTag(params.get('tag'))
+    setCategory(params.get('cat'))
+    setReady(true)
+  }, [])
+
+  React.useEffect(() => {
+    if (!ready) return
+    const url = new URL(window.location.href)
+    const set = (key: string, value: string | null) =>
+      value ? url.searchParams.set(key, value) : url.searchParams.delete(key)
+    set('q', query.trim() || null)
+    set('tag', tag)
+    set('cat', category)
+    window.history.replaceState(window.history.state, '', url.toString())
+  }, [ready, query, tag, category])
+
+  return { query, setQuery, tag, setTag, category, setCategory }
+}
+
+// Renders the "Notion Lab 콘텐츠 허브" database as a searchable, topic-grouped
+// list matching the site's own design language, instead of react-notion-x's
+// default table/gallery UI (which looks like a raw spreadsheet and, embedded
+// this deep inside a page, can't reliably render Notion's own grouped view —
+// see lib/notion.ts's hydrateGroupedCollectionViews). Reads rows directly out
+// of the recordMap already fetched for the page, and search/filtering runs
+// entirely client-side over those rows — no extra requests, and nothing the
+// page didn't already publish (unpublished rows were stripped server-side by
+// removeUnpublishedRows) can ever match.
+//
+// Search deliberately reaches past the page's own view filter: /notion-blog
+// shows only 구분-less rows and the POC 자료실 only 엔터프라이즈 POC rows, but
+// the basics customers search for first (팀원 초대, 관리자, 권한…) mostly live
+// in the POC set — a blog search for "초대" finding nothing would send them
+// away. Both sets are already public on the site, so search results mix
+// them, badged by 구분; browsing (no query) still shows only the view's rows.
 //
 // idToSlugMap (lib/notion-lab.ts's getNotionLabIdToSlugMap, injected via
 // components/NotionPage.tsx) is the single source of truth for slugs —
 // makeNotionLabSlug() is only a fallback for a row that map doesn't have yet
-// (e.g. published moments ago, before the 10-minute cache refreshed).
-// Computing slugs independently here would disagree with lib/notion-lab.ts's
+// (e.g. published moments ago, before the cache refreshed). Computing slugs
+// independently here would disagree with lib/notion-lab.ts's
 // dedupeSlugCollisions() whenever two rows' ids happen to share the same
 // short id suffix, silently linking one of them to the wrong page.
-export function NotionLabFeed({
-  block,
-  ctx,
-  idToSlugMap
-}: any) {
+export function NotionLabFeed({ block, ctx, idToSlugMap }: any) {
   const { recordMap } = ctx
+  const { query, setQuery, tag, setTag, category, setCategory } =
+    useUrlFilterState()
 
   const items = React.useMemo<FeedItem[]>(() => {
     const collectionId = getBlockCollectionId(block, recordMap)
     const viewIds: string[] = block?.view_ids || []
     if (!collectionId || !viewIds.length) return []
 
-    const rows = getCollectionViewRows(recordMap, collectionId, viewIds)
+    const inView = new Set(
+      getCollectionViewRows(recordMap, collectionId, viewIds).map(
+        (row: any) => row.id
+      )
+    )
+    const rows = getCollectionViewRows(recordMap, collectionId, viewIds, {
+      applyViewFilter: false
+    })
 
     return rows.map((row: any) => {
       const title = getBlockTitle(row, recordMap) || '(제목 없음)'
-      return {
+      const rawCategory = getText(row, recordMap, '카테고리')
+      const item = {
         id: row.id,
         title,
         slug: idToSlugMap?.[row.id] || makeNotionLabSlug(title, row.id),
-        type:
-          (getPageProperty<string>('콘텐츠 유형', row, recordMap) as string) ||
-          'No 콘텐츠 유형',
-        externalUrl:
-          (getPageProperty<string>('URL', row, recordMap) as string) || null
+        type: getText(row, recordMap, '콘텐츠 유형') || null,
+        description: getText(row, recordMap, 'Description'),
+        category: CATEGORIES.some((c) => c.name === rawCategory)
+          ? rawCategory
+          : OTHER_CATEGORY.name,
+        subcategory: getText(row, recordMap, '소분류') || null,
+        keywords: getList(row, recordMap, '키워드'),
+        externalUrl: getText(row, recordMap, 'URL') || null,
+        section: getText(row, recordMap, '구분') || null,
+        inView: inView.has(row.id)
+      }
+      return {
+        ...item,
+        searchText: normalize(
+          [
+            item.title,
+            item.description,
+            item.category,
+            item.subcategory,
+            item.type,
+            ...item.keywords
+          ]
+            .filter(Boolean)
+            .join(' ')
+        )
       }
     })
   }, [block, recordMap, idToSlugMap])
 
-  const groups = React.useMemo(() => {
-    const byType = new Map<string, FeedItem[]>()
-    for (const item of items) {
-      const key = CONTENT_TYPE_ORDER.includes(item.type)
-        ? item.type
-        : 'No 콘텐츠 유형'
-      if (!byType.has(key)) byType.set(key, [])
-      byType.get(key)!.push(item)
+  const viewItems = React.useMemo(
+    () => items.filter((item) => item.inView),
+    [items]
+  )
+
+  const categoryCounts = React.useMemo(() => {
+    const counts = new Map<string, number>()
+    for (const item of viewItems) {
+      counts.set(item.category, (counts.get(item.category) || 0) + 1)
     }
-    return CONTENT_TYPE_ORDER.map((type) => ({
-      type,
-      items: byType.get(type) || []
-    })).filter((group) => group.items.length > 0)
+    return counts
+  }, [viewItems])
+
+  const categories = React.useMemo(
+    () =>
+      [...CATEGORIES, OTHER_CATEGORY].filter((c) => categoryCounts.get(c.name)),
+    [categoryCounts]
+  )
+
+  const chips = React.useMemo(() => {
+    const present = new Set(items.flatMap((item) => item.keywords))
+    return FEATURED_KEYWORDS.filter((keyword) => present.has(keyword))
   }, [items])
 
-  if (!items.length) {
+  const tokens = React.useMemo(
+    () => query.split(/\s+/).map(normalize).filter(Boolean),
+    [query]
+  )
+  const activeCategory = categories.some((c) => c.name === category)
+    ? category
+    : null
+  const isSearching = tokens.length > 0 || !!tag
+
+  const filtered = React.useMemo(
+    () =>
+      (isSearching ? items : viewItems).filter(
+        (item) =>
+          (!activeCategory || item.category === activeCategory) &&
+          (!tag || item.keywords.includes(tag)) &&
+          tokens.every((token) => item.searchText.includes(token))
+      ),
+    [items, viewItems, isSearching, activeCategory, tag, tokens]
+  )
+
+  // Browsing (no search): group by topic, or by 소분류 inside one topic.
+  // Searching: one flat result list, since group headers around a handful
+  // of hits just add noise.
+  const groups = React.useMemo(() => {
+    if (isSearching) return [{ key: 'results', label: null, items: filtered }]
+
+    const keyOf = (item: FeedItem) =>
+      activeCategory ? item.subcategory || '기타' : item.category
+    const byKey = new Map<string, FeedItem[]>()
+    for (const item of filtered) {
+      const key = keyOf(item)
+      if (!byKey.has(key)) byKey.set(key, [])
+      byKey.get(key)!.push(item)
+    }
+
+    // Inside one topic, 소분류 keep first-seen order with "기타" last.
+    const order = activeCategory
+      ? [
+          ...[...byKey.keys()].filter((key) => key !== '기타'),
+          ...(byKey.has('기타') ? ['기타'] : [])
+        ]
+      : categories.map((c) => c.name)
+
+    return order
+      .filter((key) => byKey.has(key))
+      .map((key) => {
+        const meta = categories.find((c) => c.name === key)
+        return {
+          key,
+          label: meta && !activeCategory ? `${meta.emoji} ${key}` : key,
+          items: byKey.get(key)!
+        }
+      })
+  }, [filtered, isSearching, activeCategory, categories])
+
+  if (!viewItems.length) {
     if (process.env.NODE_ENV !== 'production') {
       console.warn(
         '[NotionLabFeed] no rows resolved — collectionId:',
@@ -99,14 +282,125 @@ export function NotionLabFeed({
     return null
   }
 
+  const resetAll = () => {
+    setQuery('')
+    setTag(null)
+    setCategory(null)
+  }
+
   return (
     <div className={styles.feed}>
+      <div className={styles.finder} role='search'>
+        <label className={styles.searchBox}>
+          <svg
+            className={styles.searchIcon}
+            viewBox='0 0 24 24'
+            aria-hidden='true'
+          >
+            <circle cx='11' cy='11' r='7' />
+            <path d='m20 20-3.5-3.5' />
+          </svg>
+          <input
+            type='search'
+            className={styles.searchInput}
+            placeholder='찾는 기능을 검색해 보세요 (예: 초대, 엑셀, 회의록)'
+            aria-label='글 검색'
+            value={query}
+            onChange={(e) => setQuery(e.target.value)}
+          />
+        </label>
+
+        {chips.length > 0 && (
+          <div className={styles.chips} aria-label='추천 키워드'>
+            {chips.map((keyword) => (
+              <button
+                key={keyword}
+                type='button'
+                className={styles.chip}
+                aria-pressed={tag === keyword}
+                onClick={() => setTag(tag === keyword ? null : keyword)}
+              >
+                #{keyword}
+              </button>
+            ))}
+          </div>
+        )}
+
+        <div className={styles.tabs} aria-label='카테고리'>
+          <button
+            type='button'
+            className={styles.tab}
+            aria-pressed={!activeCategory}
+            onClick={() => setCategory(null)}
+          >
+            전체 <span className={styles.tabCount}>{viewItems.length}</span>
+          </button>
+          {categories.map((c) => (
+            <button
+              key={c.name}
+              type='button'
+              className={styles.tab}
+              aria-pressed={activeCategory === c.name}
+              onClick={() =>
+                setCategory(activeCategory === c.name ? null : c.name)
+              }
+            >
+              {c.emoji} {c.name}{' '}
+              <span className={styles.tabCount}>
+                {categoryCounts.get(c.name)}
+              </span>
+            </button>
+          ))}
+        </div>
+      </div>
+
+      {isSearching && (
+        <p className={styles.resultSummary} aria-live='polite'>
+          <span>
+            {filtered.length
+              ? `${filtered.length}개의 글을 찾았어요`
+              : '찾는 글이 없어요'}
+          </span>
+          <button
+            type='button'
+            className={styles.resetButton}
+            onClick={resetAll}
+          >
+            초기화
+          </button>
+        </p>
+      )}
+
+      {isSearching && !filtered.length && (
+        <div className={styles.empty}>
+          다른 단어로 검색하거나 아래 키워드를 눌러 보세요.
+          <div className={styles.chips}>
+            {chips.slice(0, 6).map((keyword) => (
+              <button
+                key={keyword}
+                type='button'
+                className={styles.chip}
+                onClick={() => {
+                  setQuery('')
+                  setCategory(null)
+                  setTag(keyword)
+                }}
+              >
+                #{keyword}
+              </button>
+            ))}
+          </div>
+        </div>
+      )}
+
       {groups.map((group) => (
-        <section key={group.type} className={styles.group}>
-          <h3 className={styles.groupTitle}>
-            {group.type}
-            <span className={styles.groupCount}>{group.items.length}</span>
-          </h3>
+        <section key={group.key} className={styles.group}>
+          {group.label && (
+            <h3 className={styles.groupTitle}>
+              {group.label}
+              <span className={styles.groupCount}>{group.items.length}</span>
+            </h3>
+          )}
 
           <ul className={styles.list}>
             {group.items.map((item) => (
@@ -124,7 +418,23 @@ export function NotionLabFeed({
                   rel={item.externalUrl ? 'noopener noreferrer' : undefined}
                   className={styles.itemLink}
                 >
-                  {item.title}
+                  <span className={styles.itemTitle}>{item.title}</span>
+                  {item.description && (
+                    <span className={styles.itemDescription}>
+                      {item.description}
+                    </span>
+                  )}
+                  {(isSearching || item.type) && (
+                    <span className={styles.itemMeta}>
+                      {isSearching && item.section && (
+                        <span className={styles.sectionBadge}>
+                          {item.section}
+                        </span>
+                      )}
+                      {isSearching && <span>{item.category}</span>}
+                      {item.type && <span>{item.type}</span>}
+                    </span>
+                  )}
                 </a>
               </li>
             ))}
