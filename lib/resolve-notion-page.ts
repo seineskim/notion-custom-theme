@@ -67,6 +67,10 @@ export async function resolveNotionPage(
     }
 
     if (pageId) {
+      // Warm the ancestry check (awaited below) alongside the page fetch
+      // instead of after it — they're independent Notion round trips, and
+      // it's memoized, so the later await just picks up this result.
+      void isPageInsideSite(pageId).catch(() => {})
       recordMap = await getPage(pageId)
     } else {
       // handle mapping of user-friendly canonical page paths to Notion page IDs

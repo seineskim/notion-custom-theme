@@ -16,47 +16,64 @@ import { isPublished } from './notion-collection'
 // allows pages that actually live under site.rootNotionPageId. Database rows
 // that aren't published (lib/notion-collection.ts's isPublished — 상태 ≠ 발행 완료
 // or 외부공유 = 불가) are rejected along the way.
+//
+// Every level is memoized on its own, not just the final answer per page:
+// all blog articles share the same chain above their row (hub collection →
+// its database block → … → root), and walking it one sequential request per
+// level took ~8s — most of a cold article render. With per-level caching
+// only the article's own row (and anything not yet cached) is fetched.
 const MAX_DEPTH = 30
 
-async function getRecord(table: 'block' | 'collection', id: string) {
-  const res: any = await notion.fetch({
-    endpoint: 'syncRecordValuesMain',
-    body: { requests: [{ pointer: { table, id }, version: -1 }] }
-  })
-  return getBlockValue(res?.recordMap?.[table]?.[id])
-}
+// Short TTL so a page moved out of the blog, or a row flipped back from
+// 발행 완료, stops rendering within a minute.
+const TTL_MS = 60_000
 
-async function isPageInsideSiteUncached(pageId: string): Promise<boolean> {
-  const rootId = parsePageId(rootNotionPageId, { uuid: true })
-  let id = parsePageId(pageId, { uuid: true })
-  let table: 'block' | 'collection' = 'block'
+const rootId = parsePageId(rootNotionPageId, { uuid: true })
 
-  for (let depth = 0; id && depth < MAX_DEPTH; depth++) {
-    if (table === 'block' && id === rootId) return true
-
-    const value: any = await getRecord(table, id)
-    if (!value || value.alive === false) return false
-
-    if (table === 'block' && value.parent_table === 'collection') {
-      const collection: any = await getRecord('collection', value.parent_id)
-      if (!collection) return false
-      if (!isPublished(value, collection.schema)) return false
-
-      // continue from the database block that owns this collection
-      table = 'block'
-      id = collection.parent_id
-      continue
-    }
-
-    if (value.parent_table !== 'block') return false
-    table = 'block'
-    id = value.parent_id
+const getRecord = pMemoize(
+  async (table: 'block' | 'collection', id: string) => {
+    const res: any = await notion.fetch({
+      endpoint: 'syncRecordValuesMain',
+      body: { requests: [{ pointer: { table, id }, version: -1 }] }
+    })
+    return getBlockValue(res?.recordMap?.[table]?.[id]) as any
+  },
+  {
+    cache: new ExpiryMap(TTL_MS),
+    cacheKey: ([table, id]) => `${table}:${id}`
   }
+)
 
-  return false
+const isBlockInsideSite: (id: string, depth: number) => Promise<boolean> =
+  pMemoize(
+    async (id: string, depth: number): Promise<boolean> => {
+      if (id === rootId) return true
+      if (depth >= MAX_DEPTH) return false
+
+      const value = await getRecord('block', id)
+      if (!value || value.alive === false) return false
+
+      if (value.parent_table === 'collection') {
+        const collection = await getRecord('collection', value.parent_id)
+        if (!collection) return false
+        if (!isPublished(value, collection.schema)) return false
+
+        // continue from the database block that owns this collection
+        return isBlockInsideSite(collection.parent_id, depth + 1)
+      }
+
+      if (value.parent_table !== 'block') return false
+      return isBlockInsideSite(value.parent_id, depth + 1)
+    },
+    {
+      cache: new ExpiryMap(TTL_MS),
+      // depth is only a cycle guard — the answer for a block doesn't
+      // depend on how deep the walk that reached it started
+      cacheKey: ([id]) => id
+    }
+  )
+
+export async function isPageInsideSite(pageId: string): Promise<boolean> {
+  const id = parsePageId(pageId, { uuid: true })
+  return id ? isBlockInsideSite(id, 0) : false
 }
-
-// Short TTL so a page moved out of the blog stops rendering within a minute.
-export const isPageInsideSite = pMemoize(isPageInsideSiteUncached, {
-  cache: new ExpiryMap(60_000)
-})

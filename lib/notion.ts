@@ -18,6 +18,7 @@ import {
   navigationLinks,
   navigationStyle
 } from './config'
+import { flattenTranscriptionBlocks } from './flatten-transcriptions'
 import { getTweetsMap } from './get-tweets'
 import { notion } from './notion-api'
 import { getPreviewImageMap } from './preview-images'
@@ -180,6 +181,7 @@ export async function getPage(pageId: string): Promise<ExtendedRecordMap> {
 
   await hydrateGroupedCollectionViews(recordMap)
 
+  flattenTranscriptionBlocks(recordMap)
   pruneUnreachableBlocks(recordMap, pageId)
 
   if (navigationStyle !== 'default') {

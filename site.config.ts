@@ -31,7 +31,10 @@ export default siteConfig({
   defaultPageCoverPosition: 0.5,
 
   // whether or not to enable support for LQIP preview images (optional)
-  isPreviewImageSupportEnabled: true,
+  // Off: every Notion image URL answers the server-side fetch with 403
+  // (signed, cookie-bound), so generation never succeeded — it only added
+  // a failing request per image to every page render.
+  isPreviewImageSupportEnabled: false,
 
   // whether or not redis is enabled for caching generated preview images (optional)
   // NOTE: if you enable redis, you need to set the `REDIS_HOST` and `REDIS_PASSWORD`
