@@ -408,7 +408,11 @@ export function NotionLabFeed({ block, ctx, idToSlugMap }: any) {
 
       {(isSearching || pocOnly) && (
         <p className={styles.resultSummary} aria-live='polite'>
-          <span>
+          {/* Keyed by the count so a new count is a new text node:
+              browser translation (e.g. Chrome's) swaps text nodes for its
+              own, and React would otherwise keep updating the detached
+              original, leaving the translated "N개" stuck. */}
+          <span key={filtered.length}>
             {filtered.length
               ? `${filtered.length}개의 글을 찾았어요`
               : '찾는 글이 없어요'}

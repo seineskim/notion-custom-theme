@@ -1,11 +1,24 @@
 import Document, { Head, Html, Main, NextScript } from 'next/document'
+import { parsePageId } from 'notion-utils'
 
 import { gaId } from '@/lib/config'
 
 export default class MyDocument extends Document {
   override render() {
+    // Korean for the Notion Blog feed and its articles, English for the
+    // portfolio — see the matching client-side effect in
+    // components/NotionPage.tsx. A not-yet-generated article first renders
+    // as a fallback shell with no props, so it starts as 'en' and that
+    // effect corrects it once the page data arrives.
+    const pageProps: any = this.props.__NEXT_DATA__?.props?.pageProps || {}
+    const pageId =
+      pageProps.pageId && parsePageId(pageProps.pageId, { uuid: true })
+    const isKoreanPage =
+      !!pageProps.notionLabRecordMap ||
+      !!(pageId && pageProps.notionLabIdToSlugMap?.[pageId])
+
     return (
-      <Html lang='en'>
+      <Html lang={isKoreanPage ? 'ko' : 'en'}>
         <Head>
           <link rel='shortcut icon' href='/favicon.ico' />
           <link rel='icon' type='image/png' sizes='32x32' href='favicon.png' />

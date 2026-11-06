@@ -91,6 +91,16 @@ export function NotionPage({
     (block?.type === 'page' && block?.parent_table === 'collection') ||
     isNotionLabArticle
 
+  // The portfolio pages are English, the Notion Blog feed and its articles
+  // Korean. Browsers decide whether to offer translation (and screen
+  // readers pick a voice) from <html lang>, so keep it in step with the
+  // page on client-side navigation too — pages/_document.tsx sets the
+  // initial value for the server-rendered HTML.
+  const isKoreanPage = !!notionLabRecordMap || isNotionLabArticle
+  React.useEffect(() => {
+    document.documentElement.lang = isKoreanPage ? 'ko' : 'en'
+  }, [isKoreanPage])
+
   const showTableOfContents = !!isBlogPost
   const minTableOfContentsItems = 3
 
