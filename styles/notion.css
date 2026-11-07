@@ -271,6 +271,13 @@ form:has(> .nested-form-link) {
   display: none;
 }
 
+/* Notion Blog articles: the 콘텐츠 허브 row properties (created/updated
+   dates, Description, 구분, 콘텐츠 유형) are list metadata — the feed already
+   shows them — and read as clutter above the article body. */
+.notion-lab-article .notion-collection-page-properties {
+  display: none;
+}
+
 .notion-collection-row-property .notion-property {
   display: flex;
   justify-content: center;

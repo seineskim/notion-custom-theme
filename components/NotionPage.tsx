@@ -207,7 +207,8 @@ export function NotionPage({
     <NotionRenderer
       bodyClassName={cs(
         styles.notion,
-        pageId === site.rootNotionPageId && 'index-page'
+        pageId === site.rootNotionPageId && 'index-page',
+        isNotionLabArticle && 'notion-lab-article'
       )}
       darkMode={isDarkMode}
       components={pageComponents}
